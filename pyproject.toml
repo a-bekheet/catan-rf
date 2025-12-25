@@ -1,0 +1,36 @@
+[project]
+name = "catan-rf"
+version = "0.1.0"
+description = "Engineering-grade Catan RL research project (Python + PyTorch)"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Your Name" }
+]
+keywords = ["reinforcement-learning", "catan", "self-play", "pytorch"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Development Status :: 3 - Alpha",
+]
+dependencies = [
+  "numpy>=1.26",
+  "torch>=2.2",
+  "fastapi>=0.111",
+  "pyyaml>=6.0",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4",
+]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
