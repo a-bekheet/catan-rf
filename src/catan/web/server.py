@@ -67,9 +67,19 @@ def _serialize_state(state: GameState) -> Dict[str, Any]:
                 "settlements": sorted(player.settlements),
                 "cities": sorted(player.cities),
                 "victory_points": player.victory_points,
+                "dev_cards": [card.value for card in player.dev_cards],
+                "knights_played": player.knights_played,
             }
             for player in state.players.values()
         ],
+        "dev_deck_size": len(state.dev_deck),
+        "played_dev_card_this_turn": state.played_dev_card_this_turn,
+        "bank": {k.value: v for k, v in state.bank.items()},
+        "current_player_pieces": {
+            "settlements": 5 - len(state.players[state.current_player].settlements),
+            "cities": 4 - len(state.players[state.current_player].cities),
+            "roads": 15 - len(state.players[state.current_player].roads),
+        },
         "legal_actions": [
             {"action_type": action.action_type.value, "payload": action.payload}
             for action in state.legal_actions()
@@ -238,11 +248,36 @@ def index() -> str:
       object-fit: contain;
       display: block;
     }
+    .dev-cards-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .dev-card {
+      background: #f4eadb;
+      border-radius: 8px;
+      padding: 4px;
+      text-align: center;
+      font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
+      font-size: 11px;
+      border: 1px solid #d4be9d;
+    }
+    .dev-card img {
+      width: 100%;
+      height: 32px;
+      object-fit: contain;
+      display: block;
+      border-radius: 4px;
+    }
     .legend {
       display: grid;
-      grid-template-columns: repeat(5, minmax(40px, 1fr));
-      gap: 6px;
+      grid-template-columns: repeat(5, minmax(35px, 1fr));
+      gap: 4px;
       margin-top: 12px;
+    }
+    .legend-row {
+      display: contents;
     }
     .legend-card {
       background: #f6efe3;
@@ -256,6 +291,21 @@ def index() -> str:
       width: 100%;
       height: 36px;
       object-fit: contain;
+    }
+    .resource-deck-card, .building-deck-card, .dev-deck-card {
+      position: relative;
+    }
+    .resource-count, .building-count, .dev-count {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      background: rgba(42, 54, 45, 0.9);
+      color: white;
+      font-size: 9px;
+      font-weight: bold;
+      padding: 1px 3px;
+      border-radius: 3px;
+      line-height: 1;
     }
     .footer-meta {
       margin-top: 12px;
@@ -358,11 +408,19 @@ def index() -> str:
         <svg id="board" preserveAspectRatio="xMidYMid meet"></svg>
       </div>
       <div class="legend">
-        <div class="legend-card"><img src="/static/cards/Resource_Brick.png" alt="brick"/>Brick</div>
-        <div class="legend-card"><img src="/static/cards/Resource_Wood.png" alt="wood"/>Wood</div>
-        <div class="legend-card"><img src="/static/cards/Resource_Ore.png" alt="ore"/>Ore</div>
-        <div class="legend-card"><img src="/static/cards/Resource_Grain.png" alt="grain"/>Grain</div>
-        <div class="legend-card"><img src="/static/cards/Resource_Sheep.png" alt="sheep"/>Sheep</div>
+        <!-- Row 1: Resources -->
+        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Brick.png" alt="brick"/>Brick<div id="brickCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Wood.png" alt="wood"/>Wood<div id="lumberCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Ore.png" alt="ore"/>Ore<div id="oreCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Grain.png" alt="grain"/>Grain<div id="grainCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Sheep.png" alt="sheep"/>Sheep<div id="woolCount" class="resource-count">19</div></div>
+
+        <!-- Row 2: Buildings and Dev Cards -->
+        <div class="legend-card building-deck-card"><img id="settlementImg" src="/static/cards/Piece-Settlement.png" alt="settlements"/>Settlements<div id="settlementCount" class="building-count">5</div></div>
+        <div class="legend-card building-deck-card"><img id="cityImg" src="/static/cards/Piece-City.png" alt="cities"/>Cities<div id="cityCount" class="building-count">4</div></div>
+        <div class="legend-card building-deck-card"><img id="roadImg" src="/static/cards/Piece-Road.png" alt="roads"/>Roads<div id="roadCount" class="building-count">15</div></div>
+        <div class="legend-card dev-deck-card"><img src="/static/cards/CardBack1.png" alt="dev cards"/>Dev Cards<div id="devDeckCount" class="dev-count">25</div></div>
+        <div class="legend-card"></div> <!-- Empty slot to maintain grid -->
       </div>
     </div>
       <div class="panel">
@@ -371,6 +429,7 @@ def index() -> str:
         <div style="display:flex; gap:8px; margin-bottom:8px;">
           <button onclick="quickRoll()">Roll</button>
           <button onclick="quickPass()">Skip Turn</button>
+          <button onclick="quickBuyDevCard()">Buy Dev Card</button>
         </div>
         <div class="actions-toggle" id="actionsToggle">Show Actions ▼</div>
         <div class="actions" id="actions"></div>
@@ -431,6 +490,14 @@ def index() -> str:
       ore: '/static/cards/Resource_Ore.png',
       grain: '/static/cards/Resource_Grain.png',
       wool: '/static/cards/Resource_Sheep.png'
+    };
+
+    const devCards = {
+      knight: '/static/cards/DevCard_Knight.png',
+      victory_point: '/static/cards/DevCard_1VP.png',
+      monopoly: '/static/cards/DevCard_Monopoly.png',
+      year_of_plenty: '/static/cards/DevCard_YearOfPlenty.png',
+      road_building: '/static/cards/DevCard_RoadBuilding.png'
     };
 
     const tileTextures = {
@@ -538,6 +605,30 @@ def index() -> str:
     function render(state) {
       phaseEl.textContent = `Turn ${state.turn_index} | Player ${state.current_player} | ${state.phase}`;
       footerEl.textContent = state.last_roll ? `Last roll: ${state.last_roll}` : '';
+
+      // Update dev deck count
+      document.getElementById('devDeckCount').textContent = state.dev_deck_size;
+
+      // Update resource bank counts
+      document.getElementById('brickCount').textContent = state.bank.brick;
+      document.getElementById('lumberCount').textContent = state.bank.lumber;
+      document.getElementById('oreCount').textContent = state.bank.ore;
+      document.getElementById('grainCount').textContent = state.bank.grain;
+      document.getElementById('woolCount').textContent = state.bank.wool;
+
+      // Update building counts (current player's pieces)
+      document.getElementById('settlementCount').textContent = state.current_player_pieces.settlements;
+      document.getElementById('cityCount').textContent = state.current_player_pieces.cities;
+      document.getElementById('roadCount').textContent = state.current_player_pieces.roads;
+
+      // Update building icon hues based on current player
+      const playerHues = [0, 210, 120, 30]; // Red, Blue, Green, Orange
+      const currentHue = playerHues[state.current_player % playerHues.length];
+
+      document.getElementById('settlementImg').style.filter = `hue-rotate(${currentHue}deg)`;
+      document.getElementById('cityImg').style.filter = `hue-rotate(${currentHue}deg)`;
+      document.getElementById('roadImg').style.filter = `hue-rotate(${currentHue}deg)`;
+
       currentPlayerId = state.current_player;
       discardPanel.style.display = state.phase === 'discard' ? 'grid' : 'none';
       if (state.phase === 'discard') {
@@ -559,7 +650,7 @@ def index() -> str:
 
         const header = document.createElement('div');
         header.className = 'player-header';
-        header.innerHTML = `<span>P${player.player_id}</span><span>VP ${player.victory_points}</span>`;
+        header.innerHTML = `<span>P${player.player_id}</span><span>VP ${player.victory_points} | Knights ${player.knights_played}</span>`;
 
         const resources = document.createElement('div');
         resources.className = 'resource-row';
@@ -569,6 +660,27 @@ def index() -> str:
           cell.innerHTML = `<img src="${resourceCards[res]}" alt="${res}"/><div>${player.resources[res]}</div>`;
           resources.appendChild(cell);
         });
+
+        // Development cards section
+        const devCardCounts = {};
+        player.dev_cards.forEach(card => {
+          devCardCounts[card] = (devCardCounts[card] || 0) + 1;
+        });
+
+        if (Object.keys(devCardCounts).length > 0) {
+          const devCardsRow = document.createElement('div');
+          devCardsRow.className = 'dev-cards-row';
+          Object.entries(devCardCounts).forEach(([cardType, count]) => {
+            const cell = document.createElement('div');
+            cell.className = 'dev-card';
+            // Hide victory point cards (keep secret)
+            const displayCard = cardType === 'victory_point' ? 'CardBack1' : cardType;
+            const imgSrc = cardType === 'victory_point' ? '/static/cards/CardBack1.png' : devCards[cardType];
+            cell.innerHTML = `<img src="${imgSrc}" alt="${cardType}"/><div>${count}</div>`;
+            devCardsRow.appendChild(cell);
+          });
+          div.appendChild(devCardsRow);
+        }
 
         div.appendChild(header);
         div.appendChild(resources);
@@ -915,6 +1027,10 @@ def index() -> str:
 
     function quickPass() {
       applyAction({ action_type: 'pass_turn', payload: {} });
+    }
+
+    function quickBuyDevCard() {
+      applyAction({ action_type: 'buy_dev_card', payload: {} });
     }
 
     function submitDiscard() {

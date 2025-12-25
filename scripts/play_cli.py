@@ -23,6 +23,11 @@ Commands:
   trade <give> <receive>       Trade 4:1 with bank
   trade_player <pid> give=a:1,b:0 receive=c:1
   discard <res>=<n>,...        Discard resources (only when prompted)
+  buy_dev_card                 Buy development card (costs: ore, grain, wool)
+  play_knight <tile_id>        Play knight card and move robber
+  play_monopoly <resource>     Play monopoly card for a resource
+  play_year_of_plenty <res1> <res2>  Play year of plenty for 2 resources
+  play_road_building <edge1> <edge2>  Play road building for 2 roads
   end                          End turn
   quit                         Exit
 """.strip()
@@ -48,11 +53,18 @@ def _print_state(state: GameState) -> None:
     if state.winner is not None:
         print(f"Winner: Player {state.winner}")
     print(f"Robber tile: {state.robber_tile}")
+    print(f"Dev deck: {len(state.dev_deck)} cards")
     for pid, player in state.players.items():
+        # Count dev cards by type
+        from collections import Counter
+        dev_card_counts = Counter(player.dev_cards)
+        dev_str = ", ".join([f"{card.value}:{count}" for card, count in dev_card_counts.items()]) or "none"
+
         print(
-            f"Player {pid} | VP {player.victory_points} | "
+            f"Player {pid} | VP {player.victory_points} | Knights {player.knights_played} | "
             f"Roads {len(player.roads)} | Settlements {len(player.settlements)} | "
-            f"Cities {len(player.cities)} | Resources: {_resource_str(player.resources)}"
+            f"Cities {len(player.cities)} | Resources: {_resource_str(player.resources)} | "
+            f"Dev cards: {dev_str}"
         )
 
 
@@ -174,6 +186,42 @@ def main() -> int:
                     Action(
                         ActionType.DISCARD,
                         {"player_id": state.current_player, "resources": resources},
+                    )
+                )
+            elif cmd == "buy_dev_card":
+                state = state.apply(Action(ActionType.BUY_DEV_CARD, {}))
+            elif cmd == "play_knight":
+                tile_id = int(parts[1])
+                state = state.apply(
+                    Action(
+                        ActionType.PLAY_DEV_CARD,
+                        {"dev_card": "knight", "tile_id": tile_id},
+                    )
+                )
+            elif cmd == "play_monopoly":
+                resource = parts[1].lower()
+                state = state.apply(
+                    Action(
+                        ActionType.PLAY_DEV_CARD,
+                        {"dev_card": "monopoly", "resource": resource},
+                    )
+                )
+            elif cmd == "play_year_of_plenty":
+                resource1 = parts[1].lower()
+                resource2 = parts[2].lower()
+                state = state.apply(
+                    Action(
+                        ActionType.PLAY_DEV_CARD,
+                        {"dev_card": "year_of_plenty", "resource1": resource1, "resource2": resource2},
+                    )
+                )
+            elif cmd == "play_road_building":
+                edge1 = int(parts[1])
+                edge2 = int(parts[2])
+                state = state.apply(
+                    Action(
+                        ActionType.PLAY_DEV_CARD,
+                        {"dev_card": "road_building", "roads": [edge1, edge2]},
                     )
                 )
             elif cmd in {"end", "pass"}:
