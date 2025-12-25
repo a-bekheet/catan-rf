@@ -20,6 +20,7 @@ Commands:
   build_city <vertex>          Build city
   build_road <edge>            Build road
   move_robber <tile_id>        Move robber
+  trade <give> <receive>       Trade 4:1 with bank
   discard <res>=<n>,...        Discard resources (only when prompted)
   end                          End turn
   quit                         Exit
@@ -147,6 +148,15 @@ def main() -> int:
             elif cmd == "move_robber":
                 tile_id = int(parts[1])
                 state = state.apply(Action(ActionType.MOVE_ROBBER, {"tile_id": tile_id}))
+            elif cmd == "trade":
+                give = parts[1].lower()
+                receive = parts[2].lower()
+                state = state.apply(
+                    Action(
+                        ActionType.TRADE_BANK,
+                        {"give": give, "receive": receive, "rate": 4},
+                    )
+                )
             elif cmd == "discard":
                 resources = _parse_resources(" ".join(parts[1:]))
                 state = state.apply(

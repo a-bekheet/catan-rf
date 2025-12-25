@@ -32,6 +32,7 @@ def _serialize_state(state: GameState) -> Dict[str, Any]:
         "last_roll": state.last_roll,
         "winner": state.winner,
         "robber_tile": state.robber_tile,
+        "pending_discards": {str(pid): count for pid, count in state.pending_discards.items()},
         "tiles": [
             {
                 "tile_id": tile.tile_id,
@@ -250,22 +251,24 @@ def index() -> str:
       fill: transparent;
       stroke: transparent;
       cursor: pointer;
+      pointer-events: none;
     }
     .board-overlay.active {
-      stroke: #a85b2d;
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      opacity: 0.85;
+      pointer-events: all;
+      opacity: 0.9;
     }
-    .board-overlay.vertex {
-      stroke-width: 6;
+    .board-overlay.vertex.active {
+      fill: #c74a3a;
+      stroke: none;
     }
-    .board-overlay.edge {
+    .board-overlay.edge.active {
+      stroke: #c74a3a;
       stroke-width: 5;
+      stroke-linecap: round;
     }
-    .board-overlay.tile:hover {
-      stroke: #a85b2d;
-      stroke-width: 2.5;
+    .board-overlay.tile.active {
+      fill: rgba(199, 74, 58, 0.12);
+      stroke: none;
     }
     .discard-panel {
       margin-top: 12px;
@@ -327,6 +330,7 @@ def index() -> str:
       <div class="actions" id="actions"></div>
       <div class="discard-panel" id="discardPanel" style="display:none;">
         <strong>Discard Resources</strong>
+        <div class="mono" id="discardHint"></div>
         <div class="discard-grid">
           <input type="number" min="0" id="discard-brick" placeholder="Brick">
           <input type="number" min="0" id="discard-lumber" placeholder="Wood">
@@ -346,6 +350,7 @@ def index() -> str:
     const boardEl = document.getElementById('board');
     const footerEl = document.getElementById('footer');
     const discardPanel = document.getElementById('discardPanel');
+    const discardHint = document.getElementById('discardHint');
     let currentPlayerId = 0;
 
     const resourceCards = {
@@ -362,7 +367,17 @@ def index() -> str:
       ore: '/static/tiles/Tile_Ore.jpg',
       grain: '/static/tiles/Tile_Grain.jpg',
       wool: '/static/tiles/Tile_Sheep.jpg',
-      desert: '/static/tiles/Tile_Desert.jpg'
+      desert: '/static/tiles/Tile_Desert.jpg',
+      sea: '/static/tiles/Tile_Sea.jpg'
+    };
+
+    const portTextures = {
+      '3-1': '/static/tiles/Tile_3-1_Port.jpg',
+      brick: '/static/tiles/Tile_Brick-Port.jpg',
+      lumber: '/static/tiles/Tile_Wood-Port.jpg',
+      ore: '/static/tiles/Tile_Ore-Port.jpg',
+      grain: '/static/tiles/Tile_Grain-Port.jpg',
+      wool: '/static/tiles/Tile_Sheep-Port.jpg'
     };
 
     const playerColors = ['#c7503a', '#3578a7', '#2e8b57', '#c07a2a'];
@@ -397,6 +412,37 @@ def index() -> str:
       return offsets.map(([dx, dy]) => `${cx + dx},${cy + dy}`).join(' ');
     }
 
+    function ringCoords(radius) {
+      const dirs = [
+        [1, 0], [1, -1], [0, -1],
+        [-1, 0], [-1, 1], [0, 1]
+      ];
+      let q = radius;
+      let r = 0;
+      const coords = [];
+      for (let side = 0; side < 6; side++) {
+        const [dq, dr] = dirs[side];
+        for (let step = 0; step < radius; step++) {
+          coords.push([q, r]);
+          q += dq;
+          r += dr;
+        }
+      }
+      return coords;
+    }
+
+    function allTilesWithRadius(radius) {
+      const coords = [];
+      for (let q = -radius; q <= radius; q++) {
+        for (let r = -radius; r <= radius; r++) {
+          if (-radius <= q + r && q + r <= radius) {
+            coords.push([q, r]);
+          }
+        }
+      }
+      return coords;
+    }
+
     function tileColor(resource) {
       const map = {
         brick: '#b6653a',
@@ -404,7 +450,8 @@ def index() -> str:
         ore: '#7b7e8b',
         grain: '#d8b45d',
         wool: '#7fbf7f',
-        desert: '#d9c2a2'
+        desert: '#d9c2a2',
+        sea: '#5b7ea4'
       };
       return map[resource] || '#ccc';
     }
@@ -421,6 +468,12 @@ def index() -> str:
       footerEl.textContent = state.last_roll ? `Last roll: ${state.last_roll}` : '';
       currentPlayerId = state.current_player;
       discardPanel.style.display = state.phase === 'discard' ? 'grid' : 'none';
+      if (state.phase === 'discard') {
+        const required = state.pending_discards?.[String(state.current_player)] ?? 0;
+        discardHint.textContent = `Discard ${required} cards.`;
+      } else {
+        discardHint.textContent = '';
+      }
 
       stateEl.innerHTML = '';
       state.players.forEach(player => {
@@ -486,8 +539,118 @@ def index() -> str:
       boardEl.appendChild(defs);
 
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      let clipCounter = 0;
+
+      const outerRing = ringCoords(3);
+      const portIndices = [0, 2, 4, 6, 8, 10, 12, 14, 16];
+      const portOrder = ['3-1', 'brick', '3-1', 'lumber', '3-1', 'ore', '3-1', 'grain', 'wool'];
+      const portIndexSet = new Set(portIndices);
+      const portTiles = portIndices.map((idx, i) => ({
+        axial: outerRing[idx],
+        portType: portOrder[i]
+      }));
+      const seaTiles = outerRing.filter((_, idx) => !portIndexSet.has(idx)).map(axial => ({ axial }));
+      const perimeter = new Set(outerRing.map(axial => `${axial[0]},${axial[1]}`));
+      const landCoords = new Set(allTilesWithRadius(2).map(axial => `${axial[0]},${axial[1]}`));
+
+      function updateBounds(points) {
+        points.forEach(([px, py]) => {
+          minX = Math.min(minX, px);
+          minY = Math.min(minY, py);
+          maxX = Math.max(maxX, px);
+          maxY = Math.max(maxY, py);
+        });
+      }
+
+      function drawHexTile(cx, cy, points, textureUrl, strokeColor) {
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', points.map(([px, py]) => `${px},${py}`).join(' '));
+        poly.setAttribute('fill', tileColor('sea'));
+        poly.setAttribute('stroke', strokeColor || '#42362d');
+        poly.setAttribute('stroke-width', '1.2');
+        poly.setAttribute('filter', 'url(#shadow)');
+        boardEl.appendChild(poly);
+
+        if (!textureUrl) {
+          return;
+        }
+        const clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
+        const clipId = `clip-${clipCounter++}`;
+        clip.setAttribute('id', clipId);
+        const clipPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        clipPoly.setAttribute('points', points.map(([px, py]) => `${px},${py}`).join(' '));
+        clip.appendChild(clipPoly);
+        defs.appendChild(clip);
+
+        const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+        const imgSize = TILE_RADIUS * TILE_TEXTURE_SIZE;
+        img.setAttribute('href', textureUrl);
+        img.setAttribute('x', `${cx - imgSize / 2}`);
+        img.setAttribute('y', `${cy - imgSize / 2}`);
+        img.setAttribute('width', `${imgSize}`);
+        img.setAttribute('height', `${imgSize}`);
+        img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+        img.setAttribute('clip-path', `url(#${clipId})`);
+        boardEl.appendChild(img);
+      }
+
+      const landCenters = [];
+      state.tiles.forEach(tile => {
+        landCenters.push(axialToPixel(tile.axial[0], tile.axial[1]));
+      });
+      const landCenter = landCenters.reduce(
+        (acc, [x, y]) => [acc[0] + x, acc[1] + y],
+        [0, 0]
+      ).map(v => v / landCenters.length);
+
+      const ringCenters = [];
+      seaTiles.forEach(tile => ringCenters.push(axialToPixel(tile.axial[0], tile.axial[1])));
+      portTiles.forEach(tile => ringCenters.push(axialToPixel(tile.axial[0], tile.axial[1])));
+      const ringCenter = ringCenters.reduce(
+        (acc, [x, y]) => [acc[0] + x, acc[1] + y],
+        [0, 0]
+      ).map(v => v / ringCenters.length);
+
+      const dx = landCenter[0] - ringCenter[0];
+      const dy = landCenter[1] - ringCenter[1];
+
+      seaTiles.forEach(tile => {
+        const [cxRaw, cyRaw] = axialToPixel(tile.axial[0], tile.axial[1]);
+        const cx = cxRaw + dx;
+        const cy = cyRaw + dy;
+        const points = [
+          [cx, cy + TILE_RADIUS],
+          [cx + SQRT3 * TILE_RADIUS / 2, cy + TILE_RADIUS / 2],
+          [cx + SQRT3 * TILE_RADIUS / 2, cy - TILE_RADIUS / 2],
+          [cx, cy - TILE_RADIUS],
+          [cx - SQRT3 * TILE_RADIUS / 2, cy - TILE_RADIUS / 2],
+          [cx - SQRT3 * TILE_RADIUS / 2, cy + TILE_RADIUS / 2]
+        ];
+        updateBounds(points);
+        drawHexTile(cx, cy, points, tileTextures.sea, '#65564a');
+      });
+
+      portTiles.forEach(tile => {
+        const [cxRaw, cyRaw] = axialToPixel(tile.axial[0], tile.axial[1]);
+        const cx = cxRaw + dx;
+        const cy = cyRaw + dy;
+        const points = [
+          [cx, cy + TILE_RADIUS],
+          [cx + SQRT3 * TILE_RADIUS / 2, cy + TILE_RADIUS / 2],
+          [cx + SQRT3 * TILE_RADIUS / 2, cy - TILE_RADIUS / 2],
+          [cx, cy - TILE_RADIUS],
+          [cx - SQRT3 * TILE_RADIUS / 2, cy - TILE_RADIUS / 2],
+          [cx - SQRT3 * TILE_RADIUS / 2, cy + TILE_RADIUS / 2]
+        ];
+        updateBounds(points);
+        drawHexTile(cx, cy, points, portTextures[tile.portType], '#6b4f3c');
+      });
 
       state.tiles.forEach(tile => {
+        const coordKey = `${tile.axial[0]},${tile.axial[1]}`;
+        if (perimeter.has(coordKey) || !landCoords.has(coordKey)) {
+          return;
+        }
         const [cx, cy] = axialToPixel(tile.axial[0], tile.axial[1]);
         const points = [
           [cx, cy + TILE_RADIUS],
@@ -497,42 +660,8 @@ def index() -> str:
           [cx - SQRT3 * TILE_RADIUS / 2, cy - TILE_RADIUS / 2],
           [cx - SQRT3 * TILE_RADIUS / 2, cy + TILE_RADIUS / 2]
         ];
-        points.forEach(([px, py]) => {
-          minX = Math.min(minX, px);
-          minY = Math.min(minY, py);
-          maxX = Math.max(maxX, px);
-          maxY = Math.max(maxY, py);
-        });
-
-        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        poly.setAttribute('points', points.map(([px, py]) => `${px},${py}`).join(' '));
-        poly.setAttribute('fill', tileColor(tile.resource));
-        poly.setAttribute('stroke', '#42362d');
-        poly.setAttribute('stroke-width', '1.2');
-        poly.setAttribute('filter', 'url(#shadow)');
-        boardEl.appendChild(poly);
-
-        const texture = tileTextures[tile.resource];
-        if (texture) {
-          const clip = document.createElementNS('http://www.w3.org/2000/svg', 'clipPath');
-          const clipId = `clip-${tile.tile_id}`;
-          clip.setAttribute('id', clipId);
-          const clipPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-          clipPoly.setAttribute('points', points.map(([px, py]) => `${px},${py}`).join(' '));
-          clip.appendChild(clipPoly);
-          defs.appendChild(clip);
-
-          const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-          const imgSize = TILE_RADIUS * TILE_TEXTURE_SIZE;
-          img.setAttribute('href', texture);
-          img.setAttribute('x', `${cx - imgSize / 2}`);
-          img.setAttribute('y', `${cy - imgSize / 2}`);
-          img.setAttribute('width', `${imgSize}`);
-          img.setAttribute('height', `${imgSize}`);
-          img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-          img.setAttribute('clip-path', `url(#${clipId})`);
-          boardEl.appendChild(img);
-        }
+        updateBounds(points);
+        drawHexTile(cx, cy, points, tileTextures[tile.resource], '#42362d');
 
         if (tile.number_token) {
           const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -578,7 +707,10 @@ def index() -> str:
       const pad = 18;
       const width = Math.max(10, maxX - minX + pad * 2);
       const height = Math.max(10, maxY - minY + pad * 2);
-      boardEl.setAttribute('viewBox', `${minX - pad} ${minY - pad} ${width} ${height}`);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const size = Math.max(width, height);
+      boardEl.setAttribute('viewBox', `${cx - size / 2 - pad} ${cy - size / 2 - pad} ${size + pad * 2} ${size + pad * 2}`);
 
       state.edges.forEach(edge => {
         const vA = state.vertices.find(v => v.vertex_id === edge.vertex_a);
@@ -636,7 +768,7 @@ def index() -> str:
         }
         overlay.setAttribute('cx', x);
         overlay.setAttribute('cy', y);
-        overlay.setAttribute('r', '6');
+        overlay.setAttribute('r', '3.5');
         boardEl.appendChild(overlay);
 
         if (!vertex.occupancy) {
@@ -674,6 +806,17 @@ def index() -> str:
     async function resetGame() {
       await fetch('/api/reset', { method: 'POST' });
       await loadState();
+    }
+
+    function submitDiscard() {
+      const payload = {
+        brick: parseInt(document.getElementById('discard-brick').value || '0', 10),
+        lumber: parseInt(document.getElementById('discard-lumber').value || '0', 10),
+        ore: parseInt(document.getElementById('discard-ore').value || '0', 10),
+        grain: parseInt(document.getElementById('discard-grain').value || '0', 10),
+        wool: parseInt(document.getElementById('discard-wool').value || '0', 10)
+      };
+      applyAction({ action_type: 'discard', payload: { player_id: currentPlayerId, resources: payload } });
     }
 
     loadState();
