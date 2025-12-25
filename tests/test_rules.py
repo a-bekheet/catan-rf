@@ -37,3 +37,44 @@ def test_roll_distributes_resources_to_settlement():
     after = state.players[0].resources[target_tile.resource]
 
     assert after == before + 1
+
+
+def test_bank_trade_transfers_resources():
+    board = standard_board(seed=2)
+    state = initial_game_state(board)
+    state.phase = TurnPhase.MAIN
+    state.players[0].resources[ResourceType.BRICK] = 4
+    state.bank[ResourceType.GRAIN] = 5
+
+    state = state.apply(
+        Action(
+            ActionType.TRADE_BANK,
+            {"give": ResourceType.BRICK.value, "receive": ResourceType.GRAIN.value, "rate": 4},
+        )
+    )
+    assert state.players[0].resources[ResourceType.BRICK] == 0
+    assert state.players[0].resources[ResourceType.GRAIN] == 1
+
+
+def test_player_trade_swaps_resources():
+    board = standard_board(seed=3)
+    state = initial_game_state(board)
+    state.phase = TurnPhase.MAIN
+    state.players[0].resources[ResourceType.BRICK] = 1
+    state.players[1].resources[ResourceType.ORE] = 1
+
+    state = state.apply(
+        Action(
+            ActionType.TRADE_PLAYER,
+            {
+                "to_player": 1,
+                "give": {ResourceType.BRICK.value: 1},
+                "receive": {ResourceType.ORE.value: 1},
+            },
+        )
+    )
+
+    assert state.players[0].resources[ResourceType.BRICK] == 0
+    assert state.players[1].resources[ResourceType.BRICK] == 1
+    assert state.players[0].resources[ResourceType.ORE] == 1
+    assert state.players[1].resources[ResourceType.ORE] == 0

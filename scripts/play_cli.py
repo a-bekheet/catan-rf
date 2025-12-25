@@ -21,6 +21,7 @@ Commands:
   build_road <edge>            Build road
   move_robber <tile_id>        Move robber
   trade <give> <receive>       Trade 4:1 with bank
+  trade_player <pid> give=a:1,b:0 receive=c:1
   discard <res>=<n>,...        Discard resources (only when prompted)
   end                          End turn
   quit                         Exit
@@ -155,6 +156,16 @@ def main() -> int:
                     Action(
                         ActionType.TRADE_BANK,
                         {"give": give, "receive": receive, "rate": 4},
+                    )
+                )
+            elif cmd == "trade_player":
+                target = int(parts[1])
+                give = _parse_resources(parts[2].replace("give=", ""))
+                receive = _parse_resources(parts[3].replace("receive=", ""))
+                state = state.apply(
+                    Action(
+                        ActionType.TRADE_PLAYER,
+                        {"to_player": target, "give": give, "receive": receive},
                     )
                 )
             elif cmd == "discard":

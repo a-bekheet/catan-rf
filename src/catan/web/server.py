@@ -279,6 +279,32 @@ def index() -> str:
       display: grid;
       gap: 8px;
     }
+    .trade-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #e0cbb2;
+      background: #fff7eb;
+      display: grid;
+      gap: 10px;
+    }
+    .trade-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+      gap: 8px;
+    }
+    .trade-row select, .trade-row input {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #ccb8a3;
+      padding: 8px;
+      font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
+      font-size: 12px;
+      background: #fffaf2;
+    }
+    .trade-row input[type="number"] {
+      text-align: center;
+    }
     .discard-grid {
       display: grid;
       grid-template-columns: repeat(5, minmax(40px, 1fr));
@@ -340,6 +366,23 @@ def index() -> str:
         </div>
         <button onclick="submitDiscard()">Submit Discard</button>
       </div>
+      <div class="trade-panel" id="tradePanel" style="display:none;">
+        <strong>Trade</strong>
+        <div class="mono" id="tradeHint"></div>
+        <div><em>Bank Trade (4:1)</em></div>
+        <div class="trade-row">
+          <select id="bankGive"></select>
+          <select id="bankReceive"></select>
+        </div>
+        <button onclick="submitBankTrade()">Trade with Bank</button>
+        <div><em>Player Trade (1:1 proposal)</em></div>
+        <div class="trade-row">
+          <select id="playerTarget"></select>
+          <select id="playerGive"></select>
+          <select id="playerReceive"></select>
+        </div>
+        <button onclick="submitPlayerTrade()">Propose Player Trade</button>
+      </div>
       <div class="footer-meta" id="footer"></div>
     </div>
   </div>
@@ -351,6 +394,13 @@ def index() -> str:
     const footerEl = document.getElementById('footer');
     const discardPanel = document.getElementById('discardPanel');
     const discardHint = document.getElementById('discardHint');
+    const tradePanel = document.getElementById('tradePanel');
+    const tradeHint = document.getElementById('tradeHint');
+    const bankGive = document.getElementById('bankGive');
+    const bankReceive = document.getElementById('bankReceive');
+    const playerTarget = document.getElementById('playerTarget');
+    const playerGive = document.getElementById('playerGive');
+    const playerReceive = document.getElementById('playerReceive');
     let currentPlayerId = 0;
 
     const resourceCards = {
@@ -473,6 +523,11 @@ def index() -> str:
         discardHint.textContent = `Discard ${required} cards.`;
       } else {
         discardHint.textContent = '';
+      }
+      tradePanel.style.display = state.phase === 'main' ? 'grid' : 'none';
+      tradeHint.textContent = state.phase === 'main' ? 'Trade with bank (4:1) or propose a 1:1 player trade.' : '';
+      if (state.phase === 'main') {
+        populateTradeSelectors(state);
       }
 
       stateEl.innerHTML = '';
@@ -697,6 +752,7 @@ def index() -> str:
           const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
           overlay.setAttribute('points', points.map(([px, py]) => `${px},${py}`).join(' '));
           overlay.setAttribute('class', 'board-overlay tile active');
+          overlay.setAttribute('fill', 'rgba(199,74,58,0.15)');
           overlay.addEventListener('click', () => {
             applyAction({ action_type: 'move_robber', payload: { tile_id: tile.tile_id } });
           });
@@ -788,6 +844,27 @@ def index() -> str:
       });
     }
 
+    function populateTradeSelectors(state) {
+      const resources = ['brick', 'lumber', 'ore', 'grain', 'wool'];
+      const players = state.players.map(p => p.player_id);
+
+      function fillSelect(selectEl, opts) {
+        selectEl.innerHTML = '';
+        opts.forEach(val => {
+          const opt = document.createElement('option');
+          opt.value = val;
+          opt.textContent = val;
+          selectEl.appendChild(opt);
+        });
+      }
+
+      fillSelect(bankGive, resources);
+      fillSelect(bankReceive, resources);
+      fillSelect(playerGive, resources);
+      fillSelect(playerReceive, resources);
+      fillSelect(playerTarget, players.filter(pid => pid !== currentPlayerId));
+    }
+
     async function loadState() {
       const res = await fetch('/api/state');
       const state = await res.json();
@@ -817,6 +894,24 @@ def index() -> str:
         wool: parseInt(document.getElementById('discard-wool').value || '0', 10)
       };
       applyAction({ action_type: 'discard', payload: { player_id: currentPlayerId, resources: payload } });
+    }
+
+    function submitBankTrade() {
+      const give = bankGive.value;
+      const receive = bankReceive.value;
+      if (!give || !receive || give === receive) return;
+      applyAction({ action_type: 'trade_bank', payload: { give, receive, rate: 4 } });
+    }
+
+    function submitPlayerTrade() {
+      const target = parseInt(playerTarget.value, 10);
+      const give = playerGive.value;
+      const receive = playerReceive.value;
+      if (!Number.isFinite(target) || !give || !receive || give === receive) return;
+      applyAction({
+        action_type: 'trade_player',
+        payload: { to_player: target, give: { [give]: 1 }, receive: { [receive]: 1 } }
+      });
     }
 
     loadState();

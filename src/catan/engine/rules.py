@@ -78,6 +78,9 @@ def clone_state(state: GameState) -> GameState:
 def _can_afford(resources: ResourceBank, cost: ResourceBank) -> bool:
     return all(resources[key] >= cost[key] for key in cost)
 
+def _has_resources(resources: ResourceBank, bundle: Dict[ResourceType, int]) -> bool:
+    return all(resources[res] >= amount for res, amount in bundle.items())
+
 
 def _apply_cost(resources: ResourceBank, bank: ResourceBank, cost: ResourceBank) -> None:
     for key, amount in cost.items():
@@ -343,6 +346,37 @@ def legal_actions(state: GameState) -> List[Action]:
                         },
                     )
                 )
+        for other_pid, other_player in state.players.items():
+            if other_pid == state.current_player:
+                continue
+            for give in [
+                ResourceType.BRICK,
+                ResourceType.LUMBER,
+                ResourceType.ORE,
+                ResourceType.GRAIN,
+                ResourceType.WOOL,
+            ]:
+                if player.resources[give] <= 0:
+                    continue
+                for receive in [
+                    ResourceType.BRICK,
+                    ResourceType.LUMBER,
+                    ResourceType.ORE,
+                    ResourceType.GRAIN,
+                    ResourceType.WOOL,
+                ]:
+                    if other_player.resources[receive] <= 0:
+                        continue
+                    actions.append(
+                        Action(
+                            action_type=ActionType.TRADE_PLAYER,
+                            payload={
+                                "to_player": other_pid,
+                                "give": {give.value: 1},
+                                "receive": {receive.value: 1},
+                            },
+                        )
+                    )
         return actions
 
     return actions
@@ -472,6 +506,24 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             if state.bank[receive_res] <= 0:
                 violations.append(RuleViolation(reason="bank_empty"))
             return violations
+        if action.action_type == ActionType.TRADE_PLAYER:
+            to_player = int(action.payload.get("to_player", -1))
+            if to_player not in state.players or to_player == state.current_player:
+                violations.append(RuleViolation(reason="invalid_trade_target"))
+                return violations
+            give_payload = action.payload.get("give", {})
+            receive_payload = action.payload.get("receive", {})
+            try:
+                give_bundle = {ResourceType(k): int(v) for k, v in give_payload.items()}
+                receive_bundle = {ResourceType(k): int(v) for k, v in receive_payload.items()}
+            except ValueError:
+                violations.append(RuleViolation(reason="invalid_trade_resource"))
+                return violations
+            if not _has_resources(player.resources, give_bundle):
+                violations.append(RuleViolation(reason="insufficient_resources"))
+            if not _has_resources(state.players[to_player].resources, receive_bundle):
+                violations.append(RuleViolation(reason="counterparty_insufficient_resources"))
+            return violations
 
         violations.append(RuleViolation(reason="unsupported_action"))
         return violations
@@ -581,6 +633,16 @@ def apply_action(state: GameState, action: Action) -> GameState:
             next_state.bank[give_res] += rate
             next_state.bank[receive_res] -= 1
             next_state.players[next_state.current_player].resources[receive_res] += 1
+        elif action.action_type == ActionType.TRADE_PLAYER:
+            to_player = int(action.payload["to_player"])
+            give_bundle = {ResourceType(k): int(v) for k, v in action.payload["give"].items()}
+            receive_bundle = {ResourceType(k): int(v) for k, v in action.payload["receive"].items()}
+            for res, amt in give_bundle.items():
+                next_state.players[next_state.current_player].resources[res] -= amt
+                next_state.players[to_player].resources[res] += amt
+            for res, amt in receive_bundle.items():
+                next_state.players[to_player].resources[res] -= amt
+                next_state.players[next_state.current_player].resources[res] += amt
 
         _check_winner(next_state)
         return next_state
