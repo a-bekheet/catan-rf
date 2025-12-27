@@ -31,6 +31,8 @@ COSTS: Dict[ActionType, ResourceBank] = {
     },
 }
 
+TRADE_RATE = 4
+
 
 @dataclass(frozen=True)
 class RuleViolation:
@@ -311,6 +313,36 @@ def legal_actions(state: GameState) -> List[Action]:
                 actions.append(
                     Action(action_type=ActionType.BUILD_CITY, payload={"vertex_id": vertex_id})
                 )
+        for give in [
+            ResourceType.BRICK,
+            ResourceType.LUMBER,
+            ResourceType.ORE,
+            ResourceType.GRAIN,
+            ResourceType.WOOL,
+        ]:
+            if player.resources[give] < TRADE_RATE:
+                continue
+            for receive in [
+                ResourceType.BRICK,
+                ResourceType.LUMBER,
+                ResourceType.ORE,
+                ResourceType.GRAIN,
+                ResourceType.WOOL,
+            ]:
+                if receive == give:
+                    continue
+                if state.bank[receive] <= 0:
+                    continue
+                actions.append(
+                    Action(
+                        action_type=ActionType.TRADE_BANK,
+                        payload={
+                            "give": give.value,
+                            "receive": receive.value,
+                            "rate": TRADE_RATE,
+                        },
+                    )
+                )
         return actions
 
     return actions
@@ -419,6 +451,27 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             elif not _can_afford(player.resources, COSTS[ActionType.BUILD_CITY]):
                 violations.append(RuleViolation(reason="insufficient_resources"))
             return violations
+        if action.action_type == ActionType.TRADE_BANK:
+            give = action.payload.get("give")
+            receive = action.payload.get("receive")
+            rate = int(action.payload.get("rate", TRADE_RATE))
+            try:
+                give_res = ResourceType(str(give))
+                receive_res = ResourceType(str(receive))
+            except ValueError:
+                violations.append(RuleViolation(reason="invalid_trade_resource"))
+                return violations
+            if give_res == receive_res or give_res == ResourceType.DESERT:
+                violations.append(RuleViolation(reason="invalid_trade_pair"))
+                return violations
+            if rate <= 0:
+                violations.append(RuleViolation(reason="invalid_trade_rate"))
+                return violations
+            if player.resources[give_res] < rate:
+                violations.append(RuleViolation(reason="insufficient_resources"))
+            if state.bank[receive_res] <= 0:
+                violations.append(RuleViolation(reason="bank_empty"))
+            return violations
 
         violations.append(RuleViolation(reason="unsupported_action"))
         return violations
@@ -520,6 +573,14 @@ def apply_action(state: GameState, action: Action) -> GameState:
         elif action.action_type == ActionType.BUILD_CITY:
             vertex_id = int(action.payload["vertex_id"])
             _build_city(next_state, vertex_id)
+        elif action.action_type == ActionType.TRADE_BANK:
+            give_res = ResourceType(str(action.payload["give"]))
+            receive_res = ResourceType(str(action.payload["receive"]))
+            rate = int(action.payload.get("rate", TRADE_RATE))
+            next_state.players[next_state.current_player].resources[give_res] -= rate
+            next_state.bank[give_res] += rate
+            next_state.bank[receive_res] -= 1
+            next_state.players[next_state.current_player].resources[receive_res] += 1
 
         _check_winner(next_state)
         return next_state
