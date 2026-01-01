@@ -29,6 +29,13 @@ COSTS: Dict[ActionType, ResourceBank] = {
         ResourceType.GRAIN: 2,
         ResourceType.WOOL: 0,
     },
+    ActionType.BUY_DEV_CARD: {
+        ResourceType.BRICK: 0,
+        ResourceType.LUMBER: 0,
+        ResourceType.ORE: 1,
+        ResourceType.GRAIN: 1,
+        ResourceType.WOOL: 1,
+    },
 }
 
 TRADE_RATE = 4
@@ -53,6 +60,8 @@ def clone_state(state: GameState) -> GameState:
             settlements=set(player.settlements),
             cities=set(player.cities),
             victory_points=player.victory_points,
+            dev_cards=list(player.dev_cards),
+            knights_played=player.knights_played,
         )
 
     return GameState(
@@ -72,6 +81,11 @@ def clone_state(state: GameState) -> GameState:
         pending_discards=dict(state.pending_discards),
         robber_player=state.robber_player,
         winner=state.winner,
+        dev_deck=list(state.dev_deck),
+        dev_discard=list(state.dev_discard),
+        played_dev_card_this_turn=state.played_dev_card_this_turn,
+        new_dev_cards={pid: list(cards) for pid, cards in state.new_dev_cards.items()},
+        last_bought_dev_card=state.last_bought_dev_card,
     )
 
 
@@ -242,10 +256,47 @@ def _collect_setup_resources(state: GameState, vertex_id: int) -> None:
 
 
 def _advance_turn(state: GameState) -> None:
+    from .types import DevCardType
+
     state.current_player = (state.current_player + 1) % len(state.players)
     state.turn_index += 1
     state.phase = TurnPhase.ROLL
     state.last_roll = None
+    state.played_dev_card_this_turn = False
+    # Move new dev cards to regular hand
+    for pid in state.players:
+        if pid in state.new_dev_cards:
+            for card in state.new_dev_cards[pid]:
+                if card != DevCardType.VICTORY_POINT:  # VP already added
+                    state.players[pid].dev_cards.append(card)
+            state.new_dev_cards[pid] = []
+
+
+def _update_largest_army(state: GameState) -> None:
+    """Update largest army holder, transferring VPs immediately if changed."""
+    # Find current largest army holder
+    current_holder = None
+    for pid, player in state.players.items():
+        if player.victory_points >= 2:  # Check if they might have largest army VPs
+            knight_count = player.knights_played
+            if knight_count >= 3:
+                current_holder = pid
+                break
+
+    # Find player with most knights (3+)
+    max_knights = 0
+    new_holder = None
+    for pid, player in state.players.items():
+        if player.knights_played >= 3 and player.knights_played > max_knights:
+            max_knights = player.knights_played
+            new_holder = pid
+
+    # Transfer largest army VPs if changed
+    if current_holder != new_holder:
+        if current_holder is not None:
+            state.players[current_holder].victory_points -= 2
+        if new_holder is not None:
+            state.players[new_holder].victory_points += 2
 
 
 def legal_actions(state: GameState) -> List[Action]:
@@ -292,7 +343,7 @@ def legal_actions(state: GameState) -> List[Action]:
 
     if state.phase == TurnPhase.MAIN:
         actions.append(Action(action_type=ActionType.PASS_TURN, payload={}))
-        if _can_afford(player.resources, COSTS[ActionType.BUILD_ROAD]):
+        if _can_afford(player.resources, COSTS[ActionType.BUILD_ROAD]) and len(player.roads) < 15:
             for edge_id in state.board.graph.edges:
                 if edge_id in state.edge_occupancy:
                     continue
@@ -300,7 +351,7 @@ def legal_actions(state: GameState) -> List[Action]:
                     actions.append(
                         Action(action_type=ActionType.BUILD_ROAD, payload={"edge_id": edge_id})
                     )
-        if _can_afford(player.resources, COSTS[ActionType.BUILD_SETTLEMENT]):
+        if _can_afford(player.resources, COSTS[ActionType.BUILD_SETTLEMENT]) and len(player.settlements) < 5:
             for vertex_id in state.board.graph.vertices:
                 if not _settlement_distance_ok(state.board, state.vertex_occupancy, vertex_id):
                     continue
@@ -311,11 +362,57 @@ def legal_actions(state: GameState) -> List[Action]:
                             payload={"vertex_id": vertex_id},
                         )
                     )
-        if _can_afford(player.resources, COSTS[ActionType.BUILD_CITY]):
+        if _can_afford(player.resources, COSTS[ActionType.BUILD_CITY]) and len(player.cities) < 4:
             for vertex_id in player.settlements:
                 actions.append(
                     Action(action_type=ActionType.BUILD_CITY, payload={"vertex_id": vertex_id})
                 )
+        if _can_afford(player.resources, COSTS[ActionType.BUY_DEV_CARD]) and len(state.dev_deck) > 0:
+            actions.append(Action(action_type=ActionType.BUY_DEV_CARD, payload={}))
+
+        # Play development cards (can't play cards bought this turn, and only one dev card per turn)
+        if not state.played_dev_card_this_turn:
+            from .types import DevCardType
+            playable_cards = [card for card in player.dev_cards if card != DevCardType.VICTORY_POINT]
+            for card_type in set(playable_cards):
+                if card_type == DevCardType.KNIGHT:
+                    # Knight can be played if we can move robber to a different tile
+                    for tile_id in state.board.tiles:
+                        if tile_id != state.robber_tile:
+                            actions.append(Action(action_type=ActionType.PLAY_DEV_CARD,
+                                                payload={"dev_card": card_type.value, "tile_id": tile_id}))
+                            break  # Only need one tile option in legal actions
+                elif card_type == DevCardType.MONOPOLY:
+                    for resource in [ResourceType.BRICK, ResourceType.LUMBER, ResourceType.ORE,
+                                   ResourceType.GRAIN, ResourceType.WOOL]:
+                        actions.append(Action(action_type=ActionType.PLAY_DEV_CARD,
+                                            payload={"dev_card": card_type.value, "resource": resource.value}))
+                elif card_type == DevCardType.YEAR_OF_PLENTY:
+                    for resource1 in [ResourceType.BRICK, ResourceType.LUMBER, ResourceType.ORE,
+                                    ResourceType.GRAIN, ResourceType.WOOL]:
+                        if state.bank[resource1] > 0:
+                            for resource2 in [ResourceType.BRICK, ResourceType.LUMBER, ResourceType.ORE,
+                                            ResourceType.GRAIN, ResourceType.WOOL]:
+                                if state.bank[resource2] > 0 and (resource1 != resource2 or state.bank[resource2] > 1):
+                                    actions.append(Action(action_type=ActionType.PLAY_DEV_CARD,
+                                                        payload={"dev_card": card_type.value,
+                                                               "resource1": resource1.value,
+                                                               "resource2": resource2.value}))
+                elif card_type == DevCardType.ROAD_BUILDING:
+                    # Find possible road placements (limited by available road pieces)
+                    roads_available = 15 - len(player.roads)
+                    if roads_available > 0:
+                        possible_roads = []
+                        for edge_id in state.board.graph.edges:
+                            if edge_id in state.edge_occupancy:
+                                continue
+                            if _edge_touches_player(state.board, player, edge_id):
+                                possible_roads.append(edge_id)
+                        if len(possible_roads) > 0:
+                            # Limit roads to what player actually has available
+                            max_roads = min(2, roads_available, len(possible_roads))
+                            actions.append(Action(action_type=ActionType.PLAY_DEV_CARD,
+                                                payload={"dev_card": card_type.value, "roads": possible_roads[:max_roads]}))
         for give in [
             ResourceType.BRICK,
             ResourceType.LUMBER,
@@ -460,7 +557,9 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             return violations
         if action.action_type == ActionType.BUILD_ROAD:
             edge_id = int(action.payload.get("edge_id", -1))
-            if edge_id in state.edge_occupancy:
+            if len(player.roads) >= 15:
+                violations.append(RuleViolation(reason="no_road_pieces"))
+            elif edge_id in state.edge_occupancy:
                 violations.append(RuleViolation(reason="edge_occupied"))
             elif edge_id not in state.board.graph.edges:
                 violations.append(RuleViolation(reason="edge_not_found"))
@@ -471,7 +570,9 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             return violations
         if action.action_type == ActionType.BUILD_SETTLEMENT:
             vertex_id = int(action.payload.get("vertex_id", -1))
-            if not _settlement_distance_ok(state.board, state.vertex_occupancy, vertex_id):
+            if len(player.settlements) >= 5:
+                violations.append(RuleViolation(reason="no_settlement_pieces"))
+            elif not _settlement_distance_ok(state.board, state.vertex_occupancy, vertex_id):
                 violations.append(RuleViolation(reason="invalid_settlement_location"))
             elif not _player_has_road_touching(state.board, player, vertex_id):
                 violations.append(RuleViolation(reason="settlement_not_connected"))
@@ -480,7 +581,9 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             return violations
         if action.action_type == ActionType.BUILD_CITY:
             vertex_id = int(action.payload.get("vertex_id", -1))
-            if vertex_id not in player.settlements:
+            if len(player.cities) >= 4:
+                violations.append(RuleViolation(reason="no_city_pieces"))
+            elif vertex_id not in player.settlements:
                 violations.append(RuleViolation(reason="city_requires_settlement"))
             elif not _can_afford(player.resources, COSTS[ActionType.BUILD_CITY]):
                 violations.append(RuleViolation(reason="insufficient_resources"))
@@ -524,6 +627,73 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
             if not _has_resources(state.players[to_player].resources, receive_bundle):
                 violations.append(RuleViolation(reason="counterparty_insufficient_resources"))
             return violations
+        if action.action_type == ActionType.BUY_DEV_CARD:
+            if not _can_afford(player.resources, COSTS[ActionType.BUY_DEV_CARD]):
+                violations.append(RuleViolation(reason="insufficient_resources"))
+            if len(state.dev_deck) == 0:
+                violations.append(RuleViolation(reason="dev_deck_empty"))
+            return violations
+        if action.action_type == ActionType.PLAY_DEV_CARD:
+            if state.played_dev_card_this_turn:
+                violations.append(RuleViolation(reason="already_played_dev_card"))
+                return violations
+
+            dev_card_str = action.payload.get("dev_card")
+            try:
+                from .types import DevCardType
+                dev_card = DevCardType(dev_card_str)
+            except ValueError:
+                violations.append(RuleViolation(reason="invalid_dev_card"))
+                return violations
+
+            if dev_card not in player.dev_cards:
+                violations.append(RuleViolation(reason="player_doesnt_have_card"))
+                return violations
+
+            if dev_card == DevCardType.VICTORY_POINT:
+                violations.append(RuleViolation(reason="cannot_play_victory_point"))
+                return violations
+
+            # Cards bought this turn can't be played (except victory points which are automatic)
+            player_new_cards = state.new_dev_cards.get(state.current_player, [])
+            if dev_card in player_new_cards:
+                violations.append(RuleViolation(reason="cannot_play_card_bought_this_turn"))
+                return violations
+
+            if dev_card == DevCardType.KNIGHT:
+                tile_id = int(action.payload.get("tile_id", -1))
+                if tile_id == state.robber_tile:
+                    violations.append(RuleViolation(reason="robber_already_on_tile"))
+                elif tile_id not in state.board.tiles:
+                    violations.append(RuleViolation(reason="tile_not_found"))
+            elif dev_card == DevCardType.MONOPOLY:
+                resource_str = action.payload.get("resource")
+                try:
+                    ResourceType(resource_str)
+                except ValueError:
+                    violations.append(RuleViolation(reason="invalid_resource"))
+            elif dev_card == DevCardType.YEAR_OF_PLENTY:
+                resource1_str = action.payload.get("resource1")
+                resource2_str = action.payload.get("resource2")
+                try:
+                    resource1 = ResourceType(resource1_str)
+                    resource2 = ResourceType(resource2_str)
+                    if state.bank[resource1] == 0:
+                        violations.append(RuleViolation(reason="bank_empty"))
+                    if state.bank[resource2] == 0 or (resource1 == resource2 and state.bank[resource2] == 1):
+                        violations.append(RuleViolation(reason="bank_empty"))
+                except ValueError:
+                    violations.append(RuleViolation(reason="invalid_resource"))
+            elif dev_card == DevCardType.ROAD_BUILDING:
+                roads = action.payload.get("roads", [])
+                if len(roads) == 0:
+                    violations.append(RuleViolation(reason="no_roads_available"))
+                for edge_id in roads:
+                    if edge_id in state.edge_occupancy:
+                        violations.append(RuleViolation(reason="edge_occupied"))
+                    elif not _edge_touches_player(state.board, player, edge_id):
+                        violations.append(RuleViolation(reason="road_not_connected"))
+            return violations
 
         violations.append(RuleViolation(reason="unsupported_action"))
         return violations
@@ -532,8 +702,17 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
 
 
 def _check_winner(state: GameState) -> None:
+    from .types import DevCardType
+
     for pid, player in state.players.items():
-        if player.victory_points >= 10:
+        # Calculate total VPs including dev cards
+        total_vps = player.victory_points
+
+        # Count victory point dev cards (these are kept secret until win)
+        vp_cards = [card for card in player.dev_cards if card == DevCardType.VICTORY_POINT]
+        total_vps += len(vp_cards)
+
+        if total_vps >= 10:
             state.winner = pid
             state.phase = TurnPhase.END
             return
@@ -643,6 +822,92 @@ def apply_action(state: GameState, action: Action) -> GameState:
             for res, amt in receive_bundle.items():
                 next_state.players[to_player].resources[res] -= amt
                 next_state.players[next_state.current_player].resources[res] += amt
+        elif action.action_type == ActionType.BUY_DEV_CARD:
+            from .types import DevCardType
+            # Buy development card
+            _apply_cost(next_state.players[next_state.current_player].resources, next_state.bank, COSTS[ActionType.BUY_DEV_CARD])
+            card = next_state.dev_deck.pop()
+            next_state.last_bought_dev_card = card
+
+            # Add to new_dev_cards (can't be played this turn, except VP which is automatic)
+            if next_state.current_player not in next_state.new_dev_cards:
+                next_state.new_dev_cards[next_state.current_player] = []
+            next_state.new_dev_cards[next_state.current_player].append(card)
+
+            # Victory Point cards are automatically added to hand (hidden until victory)
+            if card == DevCardType.VICTORY_POINT:
+                next_state.players[next_state.current_player].dev_cards.append(card)
+        elif action.action_type == ActionType.PLAY_DEV_CARD:
+            from .types import DevCardType
+            dev_card_str = action.payload["dev_card"]
+            dev_card = DevCardType(dev_card_str)
+            player = next_state.players[next_state.current_player]
+
+            # Remove the card from player's hand
+            player.dev_cards.remove(dev_card)
+            next_state.dev_discard.append(dev_card)
+            next_state.played_dev_card_this_turn = True
+
+            if dev_card == DevCardType.KNIGHT:
+                tile_id = int(action.payload["tile_id"])
+                next_state.robber_tile = tile_id
+                player.knights_played += 1
+
+                # Check for largest army (3+ knights and more than any other player)
+                _update_largest_army(next_state)
+
+                # Steal from adjacent players if any
+                vertices = next_state.board.graph.hex_to_vertices.get(tile_id, [])
+                adjacent_players = []
+                for vertex_id in vertices:
+                    if vertex_id in next_state.vertex_occupancy:
+                        owner, _ = next_state.vertex_occupancy[vertex_id]
+                        if owner != next_state.current_player:
+                            adjacent_players.append(owner)
+
+                if adjacent_players:
+                    # For now, steal from first available player (could be randomized)
+                    victim = adjacent_players[0]
+                    victim_player = next_state.players[victim]
+                    total_resources = sum(victim_player.resources.values())
+                    if total_resources > 0:
+                        # Steal a random resource
+                        import random
+                        available_resources = [res for res, count in victim_player.resources.items() if count > 0]
+                        if available_resources:
+                            stolen_resource = random.choice(available_resources)
+                            victim_player.resources[stolen_resource] -= 1
+                            player.resources[stolen_resource] += 1
+
+            elif dev_card == DevCardType.MONOPOLY:
+                resource_str = action.payload["resource"]
+                resource = ResourceType(resource_str)
+                total_stolen = 0
+                for pid, other_player in next_state.players.items():
+                    if pid != next_state.current_player:
+                        stolen = other_player.resources[resource]
+                        other_player.resources[resource] = 0
+                        total_stolen += stolen
+                player.resources[resource] += total_stolen
+
+            elif dev_card == DevCardType.YEAR_OF_PLENTY:
+                resource1_str = action.payload["resource1"]
+                resource2_str = action.payload["resource2"]
+                resource1 = ResourceType(resource1_str)
+                resource2 = ResourceType(resource2_str)
+
+                if next_state.bank[resource1] > 0:
+                    next_state.bank[resource1] -= 1
+                    player.resources[resource1] += 1
+                if next_state.bank[resource2] > 0:
+                    next_state.bank[resource2] -= 1
+                    player.resources[resource2] += 1
+
+            elif dev_card == DevCardType.ROAD_BUILDING:
+                roads = action.payload.get("roads", [])
+                for edge_id in roads:
+                    if edge_id not in next_state.edge_occupancy:
+                        _build_road(next_state, edge_id, is_setup=True)  # Free roads like setup
 
         _check_winner(next_state)
         return next_state

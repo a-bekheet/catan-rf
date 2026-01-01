@@ -14,6 +14,14 @@ class ResourceType(str, Enum):
     DESERT = "desert"
 
 
+class DevCardType(str, Enum):
+    KNIGHT = "knight"
+    MONOPOLY = "monopoly"
+    YEAR_OF_PLENTY = "year_of_plenty"
+    ROAD_BUILDING = "road_building"
+    VICTORY_POINT = "victory_point"
+
+
 class ActionType(str, Enum):
     PASS_TURN = "pass_turn"
     ROLL_DICE = "roll_dice"
