@@ -159,11 +159,27 @@ def index() -> str:
       padding: 12px;
     }
     .actions {
+      display: none;
+    }
+    .actions.open {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      max-height: 36vh;
+      max-height: 30vh;
       overflow: auto;
+      margin-top: 8px;
+    }
+    .actions-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #cbb8a3;
+      background: #fff7eb;
+      cursor: pointer;
+      font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
+      font-size: 12px;
     }
     button {
       border: 1px solid #cbb8a3;
@@ -349,11 +365,15 @@ def index() -> str:
         <div class="legend-card"><img src="/static/cards/Resource_Sheep.png" alt="sheep"/>Sheep</div>
       </div>
     </div>
-    <div class="panel">
-      <h2>Players</h2>
-      <div class="status" id="status"></div>
-      <h2>Legal Actions</h2>
-      <div class="actions" id="actions"></div>
+      <div class="panel">
+        <h2>Players</h2>
+        <div class="status" id="status"></div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <button onclick="quickRoll()">Roll</button>
+          <button onclick="quickPass()">Skip Turn</button>
+        </div>
+        <div class="actions-toggle" id="actionsToggle">Show Actions ▼</div>
+        <div class="actions" id="actions"></div>
       <div class="discard-panel" id="discardPanel" style="display:none;">
         <strong>Discard Resources</strong>
         <div class="mono" id="discardHint"></div>
@@ -388,7 +408,6 @@ def index() -> str:
   </div>
   <script>
     const stateEl = document.getElementById('status');
-    const actionsEl = document.getElementById('actions');
     const phaseEl = document.getElementById('phase');
     const boardEl = document.getElementById('board');
     const footerEl = document.getElementById('footer');
@@ -401,7 +420,10 @@ def index() -> str:
     const playerTarget = document.getElementById('playerTarget');
     const playerGive = document.getElementById('playerGive');
     const playerReceive = document.getElementById('playerReceive');
+    const actionsToggle = document.getElementById('actionsToggle');
+    const actionsEl = document.getElementById('actions');
     let currentPlayerId = 0;
+    let actionsOpen = false;
 
     const resourceCards = {
       brick: '/static/cards/Resource_Brick.png',
@@ -583,6 +605,8 @@ def index() -> str:
         btn.onclick = () => applyAction(action);
         actionsEl.appendChild(btn);
       });
+      actionsEl.className = actionsOpen ? 'actions open' : 'actions';
+      actionsToggle.textContent = actionsOpen ? 'Hide Actions ▲' : 'Show Actions ▼';
 
       boardEl.innerHTML = '';
       const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
@@ -885,6 +909,14 @@ def index() -> str:
       await loadState();
     }
 
+    function quickRoll() {
+      applyAction({ action_type: 'roll_dice', payload: {} });
+    }
+
+    function quickPass() {
+      applyAction({ action_type: 'pass_turn', payload: {} });
+    }
+
     function submitDiscard() {
       const payload = {
         brick: parseInt(document.getElementById('discard-brick').value || '0', 10),
@@ -913,6 +945,12 @@ def index() -> str:
         payload: { to_player: target, give: { [give]: 1 }, receive: { [receive]: 1 } }
       });
     }
+
+    actionsToggle.addEventListener('click', () => {
+      actionsOpen = !actionsOpen;
+      actionsEl.className = actionsOpen ? 'actions open' : 'actions';
+      actionsToggle.textContent = actionsOpen ? 'Hide Actions ▲' : 'Show Actions ▼';
+    });
 
     loadState();
   </script>
