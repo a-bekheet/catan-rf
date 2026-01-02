@@ -19,6 +19,7 @@ TILES_DIR = ROOT_DIR / "tiles"
 app = FastAPI(title="Catan-RF")
 app.mount("/static/cards", StaticFiles(directory=CARDS_DIR), name="cards")
 app.mount("/static/tiles", StaticFiles(directory=TILES_DIR), name="tiles")
+app.mount("/static", StaticFiles(directory=ROOT_DIR), name="root")
 
 _state_lock = threading.Lock()
 _state: GameState = initial_game_state(standard_board(seed=42))
@@ -386,6 +387,68 @@ def index() -> str:
       text-align: center;
       background: #fffaf2;
     }
+    .dice-display {
+      background: #f6efe3;
+      border: 1px solid #e0cbb2;
+      border-radius: 12px;
+      padding: 12px;
+      margin: 10px 0;
+      text-align: center;
+    }
+    .dice-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .dice-icon {
+      font-size: 24px;
+    }
+    .dice-result {
+      font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--accent);
+      min-width: 24px;
+    }
+    .player-color-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 6px;
+      border: 1px solid rgba(66, 54, 45, 0.3);
+      vertical-align: middle;
+    }
+    .player-info {
+      display: flex;
+      align-items: center;
+    }
+    .player-colors-legend {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .player-color-legend-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      font-size: 8px;
+      text-align: center;
+    }
+    .legend-player-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      justify-content: center;
+    }
+    .legend-player-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid rgba(66, 54, 45, 0.3);
+    }
     @media (max-width: 960px) {
       .container { grid-template-columns: 1fr; }
       #board { height: 55vh; }
@@ -420,12 +483,21 @@ def index() -> str:
         <div class="legend-card building-deck-card"><img id="cityImg" src="/static/cards/Piece-City.png" alt="cities"/>Cities<div id="cityCount" class="building-count">4</div></div>
         <div class="legend-card building-deck-card"><img id="roadImg" src="/static/cards/Piece-Road.png" alt="roads"/>Roads<div id="roadCount" class="building-count">15</div></div>
         <div class="legend-card dev-deck-card"><img src="/static/cards/CardBack1.png" alt="dev cards"/>Dev Cards<div id="devDeckCount" class="dev-count">25</div></div>
-        <div class="legend-card"></div> <!-- Empty slot to maintain grid -->
+        <div class="legend-card player-colors-legend">
+          <div style="font-size: 10px; font-weight: bold; margin-bottom: 4px;">Players</div>
+          <div id="playerColorLegend" class="player-color-legend-content"></div>
+        </div>
       </div>
     </div>
       <div class="panel">
         <h2>Players</h2>
         <div class="status" id="status"></div>
+        <div class="dice-display" id="diceDisplay">
+          <div class="dice-container">
+            <div class="dice-icon">🎲</div>
+            <div class="dice-result" id="diceResult">-</div>
+          </div>
+        </div>
         <div style="display:flex; gap:8px; margin-bottom:8px;">
           <button onclick="quickRoll()">Roll</button>
           <button onclick="quickPass()">Skip Turn</button>
@@ -483,6 +555,8 @@ def index() -> str:
     const actionsEl = document.getElementById('actions');
     let currentPlayerId = 0;
     let actionsOpen = false;
+    let previousRoll = null;
+    let previousWinner = null;
 
     const resourceCards = {
       brick: '/static/cards/Resource_Brick.png',
@@ -606,6 +680,26 @@ def index() -> str:
       phaseEl.textContent = `Turn ${state.turn_index} | Player ${state.current_player} | ${state.phase}`;
       footerEl.textContent = state.last_roll ? `Last roll: ${state.last_roll}` : '';
 
+      // Check for game winner and play win sound
+      if (state.winner !== null && state.winner !== previousWinner) {
+        playWinSound();
+        previousWinner = state.winner;
+      }
+
+      // Update dice display and play sound if new roll
+      const diceResult = document.getElementById('diceResult');
+      if (state.last_roll) {
+        diceResult.textContent = state.last_roll;
+
+        // Play dice sound if this is a new roll
+        if (previousRoll !== state.last_roll && previousRoll !== null) {
+          playDiceSound();
+        }
+        previousRoll = state.last_roll;
+      } else {
+        diceResult.textContent = '-';
+      }
+
       // Update dev deck count
       document.getElementById('devDeckCount').textContent = state.dev_deck_size;
 
@@ -629,6 +723,17 @@ def index() -> str:
       document.getElementById('cityImg').style.filter = `hue-rotate(${currentHue}deg)`;
       document.getElementById('roadImg').style.filter = `hue-rotate(${currentHue}deg)`;
 
+      // Update player color legend
+      const playerColorLegend = document.getElementById('playerColorLegend');
+      playerColorLegend.innerHTML = '';
+      for (let i = 0; i < 4; i++) {
+        const playerItem = document.createElement('div');
+        playerItem.className = 'legend-player-item';
+        const playerColor = playerColors[i % playerColors.length];
+        playerItem.innerHTML = `<div class="legend-player-dot" style="background-color: ${playerColor}"></div>P${i}`;
+        playerColorLegend.appendChild(playerItem);
+      }
+
       currentPlayerId = state.current_player;
       discardPanel.style.display = state.phase === 'discard' ? 'grid' : 'none';
       if (state.phase === 'discard') {
@@ -648,9 +753,20 @@ def index() -> str:
         const div = document.createElement('div');
         div.className = 'player-card' + (player.player_id === state.current_player ? ' active' : '');
 
+        // Add player color indicator
+        const playerColor = playerColors[player.player_id % playerColors.length];
+        div.style.borderLeft = `5px solid ${playerColor}`;
+        div.style.boxShadow = `0 0 0 1px ${playerColor}20`; // 20% opacity color border
+
         const header = document.createElement('div');
         header.className = 'player-header';
-        header.innerHTML = `<span>P${player.player_id}</span><span>VP ${player.victory_points} | Knights ${player.knights_played}</span>`;
+
+        // Add colored player indicator dot
+        const playerDot = document.createElement('span');
+        playerDot.className = 'player-color-dot';
+        playerDot.style.backgroundColor = playerColor;
+
+        header.innerHTML = `<span class="player-info"><span class="player-color-dot" style="background-color: ${playerColor}"></span>P${player.player_id}</span><span>VP ${player.victory_points} | Knights ${player.knights_played}</span>`;
 
         const resources = document.createElement('div');
         resources.className = 'resource-row';
@@ -673,10 +789,20 @@ def index() -> str:
           Object.entries(devCardCounts).forEach(([cardType, count]) => {
             const cell = document.createElement('div');
             cell.className = 'dev-card';
-            // Hide victory point cards (keep secret)
-            const displayCard = cardType === 'victory_point' ? 'CardBack1' : cardType;
-            const imgSrc = cardType === 'victory_point' ? '/static/cards/CardBack1.png' : devCards[cardType];
-            cell.innerHTML = `<img src="${imgSrc}" alt="${cardType}"/><div>${count}</div>`;
+
+            // Show cards only if it's the current player's turn, otherwise show card backs
+            let imgSrc, displayCard;
+            if (player.player_id === state.current_player) {
+              // Current player can see their own cards
+              displayCard = cardType;
+              imgSrc = devCards[cardType];
+            } else {
+              // Other players see card backs
+              displayCard = 'CardBack1';
+              imgSrc = '/static/cards/CardBack1.png';
+            }
+
+            cell.innerHTML = `<img src="${imgSrc}" alt="${displayCard}"/><div>${count}</div>`;
             devCardsRow.appendChild(cell);
           });
           div.appendChild(devCardsRow);
@@ -978,6 +1104,32 @@ def index() -> str:
         shape.setAttribute('stroke-width', '1');
         boardEl.appendChild(shape);
       });
+    }
+
+    function playDiceSound() {
+      try {
+        // Create audio element and play the dice roll sound
+        const audio = new Audio('/static/dice-sound.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(err => {
+          console.log('Dice sound playback failed:', err);
+        });
+      } catch (err) {
+        console.log('Could not play dice sound:', err);
+      }
+    }
+
+    function playWinSound() {
+      try {
+        // Create audio element and play the win sound
+        const audio = new Audio('/static/win-sound.mp3');
+        audio.volume = 0.7;
+        audio.play().catch(err => {
+          console.log('Win sound playback failed:', err);
+        });
+      } catch (err) {
+        console.log('Could not play win sound:', err);
+      }
     }
 
     function populateTradeSelectors(state) {
