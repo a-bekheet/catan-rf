@@ -22,7 +22,7 @@ app.mount("/static/tiles", StaticFiles(directory=TILES_DIR), name="tiles")
 app.mount("/static", StaticFiles(directory=ROOT_DIR), name="root")
 
 _state_lock = threading.Lock()
-_state: GameState = initial_game_state(standard_board(seed=42))
+_state: GameState = initial_game_state(standard_board())
 
 
 def _serialize_state(state: GameState) -> Dict[str, Any]:
@@ -231,8 +231,14 @@ def index() -> str:
       font-size: 12px;
     }
     .resource-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+    }
+    .resource-and-dev-row {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(50px, 1fr));
       gap: 6px;
     }
     .resource {
@@ -242,6 +248,8 @@ def index() -> str:
       text-align: center;
       font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
       font-size: 11px;
+      flex: 1;
+      min-width: 50px;
     }
     .resource img {
       width: 100%;
@@ -263,6 +271,8 @@ def index() -> str:
       font-family: "IBM Plex Mono", "Menlo", "Monaco", monospace;
       font-size: 11px;
       border: 1px solid #d4be9d;
+      flex: 1;
+      min-width: 50px;
     }
     .dev-card img {
       width: 100%;
@@ -354,6 +364,19 @@ def index() -> str:
       background: #fff7eb;
       display: grid;
       gap: 10px;
+    }
+    .dev-card-panel {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #e0cbb2;
+      background: #f6efe3;
+      display: grid;
+      gap: 10px;
+    }
+    .dev-card-actions {
+      display: grid;
+      gap: 8px;
     }
     .trade-row {
       display: grid;
@@ -534,6 +557,11 @@ def index() -> str:
         </div>
         <button onclick="submitPlayerTrade()">Propose Player Trade</button>
       </div>
+      <div class="dev-card-panel" id="devCardPanel" style="display:none;">
+        <strong>Play Development Card</strong>
+        <div class="mono" id="devCardHint"></div>
+        <div id="devCardActions" class="dev-card-actions"></div>
+      </div>
       <div class="footer-meta" id="footer"></div>
     </div>
   </div>
@@ -546,6 +574,9 @@ def index() -> str:
     const discardHint = document.getElementById('discardHint');
     const tradePanel = document.getElementById('tradePanel');
     const tradeHint = document.getElementById('tradeHint');
+    const devCardPanel = document.getElementById('devCardPanel');
+    const devCardHint = document.getElementById('devCardHint');
+    const devCardActions = document.getElementById('devCardActions');
     const bankGive = document.getElementById('bankGive');
     const bankReceive = document.getElementById('bankReceive');
     const playerTarget = document.getElementById('playerTarget');
@@ -748,6 +779,20 @@ def index() -> str:
         populateTradeSelectors(state);
       }
 
+      // Show dev card panel only in main phase for current player with dev cards
+      const currentPlayer = state.players.find(p => p.player_id === state.current_player);
+      const hasDevCards = currentPlayer && currentPlayer.dev_cards.length > 0;
+      devCardPanel.style.display = (state.phase === 'main' && hasDevCards && !state.played_dev_card_this_turn) ? 'grid' : 'none';
+
+      if (state.phase === 'main' && hasDevCards && !state.played_dev_card_this_turn) {
+        populateDevCardActions(state, currentPlayer);
+        devCardHint.textContent = 'Choose a development card to play (one per turn).';
+      } else if (state.played_dev_card_this_turn) {
+        devCardHint.textContent = 'Development card already played this turn.';
+      } else {
+        devCardHint.textContent = '';
+      }
+
       stateEl.innerHTML = '';
       state.players.forEach(player => {
         const div = document.createElement('div');
@@ -768,48 +813,50 @@ def index() -> str:
 
         header.innerHTML = `<span class="player-info"><span class="player-color-dot" style="background-color: ${playerColor}"></span>P${player.player_id}</span><span>VP ${player.victory_points} | Knights ${player.knights_played}</span>`;
 
-        const resources = document.createElement('div');
-        resources.className = 'resource-row';
+        // Resources row
+        const resourcesRow = document.createElement('div');
+        resourcesRow.className = 'resource-row';
+
+        // Add resource cards
         ['brick', 'lumber', 'ore', 'grain', 'wool'].forEach(res => {
           const cell = document.createElement('div');
           cell.className = 'resource';
           cell.innerHTML = `<img src="${resourceCards[res]}" alt="${res}"/><div>${player.resources[res]}</div>`;
-          resources.appendChild(cell);
+          resourcesRow.appendChild(cell);
         });
 
-        // Development cards section
-        const devCardCounts = {};
-        player.dev_cards.forEach(card => {
-          devCardCounts[card] = (devCardCounts[card] || 0) + 1;
-        });
+        // Add dev card count for all players (using CardBack1)
+        const totalDevCards = player.dev_cards.length;
+        if (totalDevCards > 0) {
+          const devCountCell = document.createElement('div');
+          devCountCell.className = 'dev-card';
+          devCountCell.innerHTML = `<img src="/static/cards/CardBack1.png" alt="dev cards"/><div>${totalDevCards}</div>`;
+          resourcesRow.appendChild(devCountCell);
+        }
 
-        if (Object.keys(devCardCounts).length > 0) {
-          const devCardsRow = document.createElement('div');
-          devCardsRow.className = 'dev-cards-row';
+        // Detailed dev cards for current player (above resources)
+        let detailedDevCards = null;
+        if (player.player_id === state.current_player && totalDevCards > 0) {
+          const devCardCounts = {};
+          player.dev_cards.forEach(card => {
+            devCardCounts[card] = (devCardCounts[card] || 0) + 1;
+          });
+
+          detailedDevCards = document.createElement('div');
+          detailedDevCards.className = 'dev-cards-row';
           Object.entries(devCardCounts).forEach(([cardType, count]) => {
             const cell = document.createElement('div');
             cell.className = 'dev-card';
-
-            // Show cards only if it's the current player's turn, otherwise show card backs
-            let imgSrc, displayCard;
-            if (player.player_id === state.current_player) {
-              // Current player can see their own cards
-              displayCard = cardType;
-              imgSrc = devCards[cardType];
-            } else {
-              // Other players see card backs
-              displayCard = 'CardBack1';
-              imgSrc = '/static/cards/CardBack1.png';
-            }
-
-            cell.innerHTML = `<img src="${imgSrc}" alt="${displayCard}"/><div>${count}</div>`;
-            devCardsRow.appendChild(cell);
+            cell.innerHTML = `<img src="${devCards[cardType]}" alt="${cardType}"/><div>${count}</div>`;
+            detailedDevCards.appendChild(cell);
           });
-          div.appendChild(devCardsRow);
         }
 
         div.appendChild(header);
-        div.appendChild(resources);
+        if (detailedDevCards) {
+          div.appendChild(detailedDevCards);
+        }
+        div.appendChild(resourcesRow);
         stateEl.appendChild(div);
       });
 
@@ -1153,6 +1200,86 @@ def index() -> str:
       fillSelect(playerTarget, players.filter(pid => pid !== currentPlayerId));
     }
 
+    function populateDevCardActions(state, player) {
+      const devCardCounts = {};
+      player.dev_cards.forEach(card => {
+        devCardCounts[card] = (devCardCounts[card] || 0) + 1;
+      });
+
+      devCardActions.innerHTML = '';
+
+      Object.entries(devCardCounts).forEach(([cardType, count]) => {
+        if (count > 0) {
+          const actionDiv = document.createElement('div');
+
+          if (cardType === 'knight') {
+            actionDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${devCards[cardType]}" alt="${cardType}" style="width: 32px; height: 32px;">
+                <span>Knight (${count})</span>
+                <button onclick="prepareKnightPlay()">Play Knight</button>
+              </div>
+            `;
+          } else if (cardType === 'monopoly') {
+            actionDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${devCards[cardType]}" alt="${cardType}" style="width: 32px; height: 32px;">
+                <span>Monopoly (${count})</span>
+                <select id="monopolyResource">
+                  <option value="brick">Brick</option>
+                  <option value="lumber">Lumber</option>
+                  <option value="ore">Ore</option>
+                  <option value="grain">Grain</option>
+                  <option value="wool">Wool</option>
+                </select>
+                <button onclick="playMonopoly()">Play Monopoly</button>
+              </div>
+            `;
+          } else if (cardType === 'year_of_plenty') {
+            actionDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${devCards[cardType]}" alt="${cardType}" style="width: 32px; height: 32px;">
+                <span>Year of Plenty (${count})</span>
+                <select id="yearResource1">
+                  <option value="brick">Brick</option>
+                  <option value="lumber">Lumber</option>
+                  <option value="ore">Ore</option>
+                  <option value="grain">Grain</option>
+                  <option value="wool">Wool</option>
+                </select>
+                <select id="yearResource2">
+                  <option value="brick">Brick</option>
+                  <option value="lumber">Lumber</option>
+                  <option value="ore">Ore</option>
+                  <option value="grain">Grain</option>
+                  <option value="wool">Wool</option>
+                </select>
+                <button onclick="playYearOfPlenty()">Play Year of Plenty</button>
+              </div>
+            `;
+          } else if (cardType === 'road_building') {
+            actionDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${devCards[cardType]}" alt="${cardType}" style="width: 32px; height: 32px;">
+                <span>Road Building (${count})</span>
+                <button onclick="prepareRoadBuilding()">Play Road Building</button>
+              </div>
+            `;
+          } else if (cardType === 'victory_point') {
+            actionDiv.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <img src="${devCards[cardType]}" alt="${cardType}" style="width: 32px; height: 32px;">
+                <span>Victory Point (${count})</span>
+                <em>Automatic at game end</em>
+              </div>
+            `;
+          }
+
+          devCardActions.appendChild(actionDiv);
+        }
+      });
+    }
+
     async function loadState() {
       const res = await fetch('/api/state');
       const state = await res.json();
@@ -1183,6 +1310,33 @@ def index() -> str:
 
     function quickBuyDevCard() {
       applyAction({ action_type: 'buy_dev_card', payload: {} });
+    }
+
+    function prepareKnightPlay() {
+      alert('Click on a tile to move the robber there.');
+      // The knight card will be played when user clicks a tile (handled by tile click events)
+    }
+
+    function playMonopoly() {
+      const resource = document.getElementById('monopolyResource').value;
+      applyAction({
+        action_type: 'play_dev_card',
+        payload: { dev_card: 'monopoly', resource: resource }
+      });
+    }
+
+    function playYearOfPlenty() {
+      const resource1 = document.getElementById('yearResource1').value;
+      const resource2 = document.getElementById('yearResource2').value;
+      applyAction({
+        action_type: 'play_dev_card',
+        payload: { dev_card: 'year_of_plenty', resource1: resource1, resource2: resource2 }
+      });
+    }
+
+    function prepareRoadBuilding() {
+      alert('Click on two road locations to place roads.');
+      // Road building card will be played when user clicks road locations
     }
 
     function submitDiscard() {
@@ -1237,7 +1391,7 @@ def get_state() -> Dict[str, Any]:
 def reset_game() -> Dict[str, Any]:
     global _state
     with _state_lock:
-        _state = initial_game_state(standard_board(seed=42))
+        _state = initial_game_state(standard_board())
         return _serialize_state(_state)
 
 

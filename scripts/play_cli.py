@@ -115,7 +115,7 @@ def _parse_resources(arg: str) -> Dict[str, int]:
 
 
 def main() -> int:
-    board = standard_board(seed=42)
+    board = standard_board()
     state = initial_game_state(board)
     print("Catan CLI - type 'help' for commands")
 
