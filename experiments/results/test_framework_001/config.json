@@ -1,0 +1,41 @@
+{
+  "experiment_id": "test_framework_001",
+  "name": "Framework Test: Random vs Q-Table",
+  "description": "Test run to verify the new framework works correctly",
+  "agent_configs": [
+    {
+      "type": "RandomAgent",
+      "params": {
+        "seed": 42
+      }
+    },
+    {
+      "type": "QTableAgent",
+      "params": {
+        "epsilon": 0.3
+      }
+    },
+    {
+      "type": "RandomAgent",
+      "params": {
+        "seed": 123
+      }
+    },
+    {
+      "type": "RandomAgent",
+      "params": {
+        "seed": 456
+      }
+    }
+  ],
+  "num_episodes": 5,
+  "max_steps_per_game": 100,
+  "evaluation_frequency": 2,
+  "save_frequency": 3,
+  "data_collection": {
+    "save_episodes": true,
+    "track_decisions": true,
+    "record_states": true
+  },
+  "hyperparameters": {}
+}
