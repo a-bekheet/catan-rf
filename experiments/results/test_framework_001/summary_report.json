@@ -1,0 +1,79 @@
+{
+  "experiment_config": {
+    "experiment_id": "test_framework_001",
+    "name": "Framework Test: Random vs Q-Table",
+    "description": "Test run to verify the new framework works correctly",
+    "agent_configs": [
+      {
+        "type": "RandomAgent",
+        "params": {
+          "seed": 42
+        }
+      },
+      {
+        "type": "QTableAgent",
+        "params": {
+          "epsilon": 0.3
+        }
+      },
+      {
+        "type": "RandomAgent",
+        "params": {
+          "seed": 123
+        }
+      },
+      {
+        "type": "RandomAgent",
+        "params": {
+          "seed": 456
+        }
+      }
+    ],
+    "num_episodes": 5,
+    "max_steps_per_game": 100,
+    "evaluation_frequency": 2,
+    "save_frequency": 3,
+    "data_collection": {
+      "save_episodes": true,
+      "track_decisions": true,
+      "record_states": true
+    },
+    "hyperparameters": {}
+  },
+  "total_episodes": 5,
+  "summary_statistics": {
+    "episodes_analyzed": 5,
+    "win_rates": {},
+    "game_length_stats": {
+      "mean": 100.0,
+      "std": 0.0,
+      "min": 100,
+      "max": 100
+    },
+    "score_stats": {
+      "mean": 2.0,
+      "std": 0.0,
+      "min": 2,
+      "max": 2
+    },
+    "runtime_hours": 0.00029458052582210966
+  },
+  "final_statistics": {
+    "episodes_analyzed": 5,
+    "win_rates": {},
+    "game_length_stats": {
+      "mean": 100.0,
+      "std": 0.0,
+      "min": 100,
+      "max": 100
+    },
+    "score_stats": {
+      "mean": 2.0,
+      "std": 0.0,
+      "min": 2,
+      "max": 2
+    },
+    "runtime_hours": 0.0002945913871129354
+  },
+  "generated_at": "2025-12-27T15:34:40.695220"
+}

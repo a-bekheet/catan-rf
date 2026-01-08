@@ -540,6 +540,24 @@ if __name__ == "__main__":
             script_path.unlink()
 
 
+def run_multi_agent_training():
+    """Run the new multi-agent RL training system."""
+    print(f"{Colors.OKBLUE}🚀 Multi-Agent RL Training System{Colors.ENDC}")
+    print("=" * 50)
+    print(f"{Colors.OKCYAN}Train AI agents using cutting-edge RL frameworks:{Colors.ENDC}")
+    print("  • Ray RLlib (PPO) - Distributed policy optimization")
+    print("  • TorchRL (SAC) - Soft actor-critic with entropy")
+    print("  • LangGraph (LLM) - Strategic reasoning with LLMs")
+    print()
+
+    try:
+        subprocess.run([sys.executable, 'train_agents.py'])
+    except KeyboardInterrupt:
+        print(f"\n{Colors.WARNING}Training interrupted{Colors.ENDC}")
+    except Exception as e:
+        print(f"{Colors.FAIL}Error running training: {e}{Colors.ENDC}")
+
+
 def main_menu():
     """Show the main interactive menu."""
     print_banner()
@@ -551,36 +569,33 @@ def main_menu():
         print(f"\n{Colors.BOLD}🎮 MAIN MENU{Colors.ENDC}")
         print("=" * 30)
         print(f"{Colors.OKCYAN}1.{Colors.ENDC} 🌐 Start Web Interface (Interactive Game)")
-        print(f"{Colors.OKCYAN}2.{Colors.ENDC} 🎲 Play Simple CLI Game")
-        print(f"{Colors.OKCYAN}3.{Colors.ENDC} 🤖 Test DQN Integration")
-        print(f"{Colors.OKCYAN}4.{Colors.ENDC} 🎯 Basic Training Demo (Legacy)")
-        print(f"{Colors.OKCYAN}5.{Colors.ENDC} 🚀 Advanced Training System")
-        print(f"{Colors.OKCYAN}6.{Colors.ENDC} 🏆 Training Tournament")
-        print(f"{Colors.OKCYAN}7.{Colors.ENDC} 📊 Show System Info")
-        print(f"{Colors.OKCYAN}8.{Colors.ENDC} ❌ Exit")
+        print(f"{Colors.OKCYAN}2.{Colors.ENDC} 🤖 Multi-Agent RL Training (PPO/SAC/LLM) [NEW!]")
+        print(f"{Colors.OKCYAN}3.{Colors.ENDC} 🎲 Play Simple CLI Game")
+        print(f"{Colors.OKCYAN}4.{Colors.ENDC} 🚀 Advanced Training System (Legacy DQN)")
+        print(f"{Colors.OKCYAN}5.{Colors.ENDC} 🏆 Training Tournament")
+        print(f"{Colors.OKCYAN}6.{Colors.ENDC} 📊 Show System Info")
+        print(f"{Colors.OKCYAN}7.{Colors.ENDC} ❌ Exit")
 
         try:
-            choice = input(f"\n{Colors.BOLD}Choose option (1-8): {Colors.ENDC}").strip()
+            choice = input(f"\n{Colors.BOLD}Choose option (1-7): {Colors.ENDC}").strip()
 
             if choice == '1':
                 run_web_server()
             elif choice == '2':
-                run_simple_game()
+                run_multi_agent_training()
             elif choice == '3':
-                run_dqn_demo()
+                run_simple_game()
             elif choice == '4':
-                run_training_demo()
-            elif choice == '5':
                 run_advanced_training()
-            elif choice == '6':
+            elif choice == '5':
                 run_training_tournament()
-            elif choice == '7':
+            elif choice == '6':
                 show_system_info()
-            elif choice == '8':
+            elif choice == '7':
                 print(f"{Colors.OKGREEN}👋 Goodbye!{Colors.ENDC}")
                 break
             else:
-                print(f"{Colors.WARNING}Invalid choice. Please select 1-8.{Colors.ENDC}")
+                print(f"{Colors.WARNING}Invalid choice. Please select 1-7.{Colors.ENDC}")
 
         except KeyboardInterrupt:
             print(f"\n{Colors.OKGREEN}👋 Goodbye!{Colors.ENDC}")
