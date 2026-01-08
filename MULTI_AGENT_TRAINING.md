@@ -36,8 +36,22 @@ python train_agents.py
 ## 📦 Installation
 
 ### Install Dependencies
+
+**Using UV (Recommended - 10x Faster!)**
 ```bash
-pip install -r requirements.txt
+# Install UV
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install all dependencies
+uv sync
+
+# Activate virtual environment
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+**Using pip (Alternative)**
+```bash
+pip install -e .
 ```
 
 ### Optional: LLM API Keys (for LangGraph agent)
@@ -254,13 +268,19 @@ config = {
 
 ### Ray RLlib not working
 ```bash
-# Reinstall Ray with RLlib
-pip install --upgrade ray[rllib]
+# With UV (recommended)
+uv pip install --upgrade "ray[rllib]>=2.9.0"
+
+# Or with pip
+pip install --upgrade "ray[rllib]>=2.9.0"
 ```
 
 ### TorchRL errors
 ```bash
-# Install TorchRL and TensorDict
+# With UV (recommended)
+uv pip install torchrl tensordict
+
+# Or with pip
 pip install torchrl tensordict
 ```
 

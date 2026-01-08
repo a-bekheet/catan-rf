@@ -1,67 +1,124 @@
-# Catan Reinforcement Learning
+# Catan Multi-Agent RL Training System
 
-Deep reinforcement learning framework for Settlers of Catan using PyTorch DQN agents.
+Train AI agents using cutting-edge RL frameworks to play Settlers of Catan!
 
-## Features
-
-- **Complete Game Engine**: Full Catan rules implementation with setup, trading, building, and victory conditions
-- **DQN Agents**: Baseline MLP, Spatial CNN, and Rainbow DQN architectures
-- **State Encoders**: 90-feature vector encoder and 12×7×7 spatial tensor encoder
-- **Action Space**: 1017 possible actions with legal action masking
-- **Training System**: Progress tracking, checkpointing, and real-time visualization
-- **Web Interface**: Interactive browser-based gameplay
-- **Tournament Mode**: Multi-agent evaluation and comparison
-
-## Quick Start
+## 🚀 Quick Start (UV - Recommended)
 
 ```bash
-python run.py
+# 1. Install UV (blazingly fast package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Install dependencies
+uv sync
+
+# 3. Activate environment
+source .venv/bin/activate
+
+# 4. Start training!
+python train_agents.py
 ```
 
-Choose from:
-1. **Web Interface** - Interactive game at `http://localhost:8001`
-2. **DQN Training** - Train agents with various configurations
-3. **Tournament** - Compare agent performance
+## 📦 Alternative: Using pip
 
-## Training Results
+```bash
+pip install -e .
+python train_agents.py
+```
 
-Recent demo (20 episodes):
-- **Agent 2**: 4.8% win rate (Rainbow DQN)
-- **Agent 3**: 2.4% win rate (Baseline DQN)
-- **Agent 0**: 1.2% win rate (Baseline DQN)
+---
 
-## Architecture
+## 🎯 What's Included
 
-### State Representation
-- **Feature Encoder**: Hand-crafted strategic features (resources, buildings, positions)
-- **Spatial Encoder**: CNN-compatible board representation with resource/building channels
+## 🤖 Three RL Frameworks
 
-### Action Space
-- Building actions (settlements, cities, roads)
-- Trading (player-to-player, bank)
-- Development cards (buy, play)
-- Game flow (dice roll, robber movement, turn management)
+1. **Ray RLlib (PPO)** - Proximal Policy Optimization for fast distributed training
+2. **TorchRL (SAC)** - Soft Actor-Critic for sample-efficient learning
+3. **LangGraph (LLM)** - Strategic reasoning with GPT-4/Claude
 
-### Reward System
-- Victory bonus: +100 points
-- Victory point gain: +10 per VP
-- Building progress: +1 per building
-- Time penalty: -0.01 per turn
-- Loss penalty: -10 points
+## ✨ Features
 
-## Requirements
+- **Complete Game Engine**: Full Catan rules implementation
+- **Beautiful CLI**: Real-time progress bars, ETA, and metrics
+- **Auto Checkpointing**: Never lose training progress
+- **Tournament Mode**: Compare all agents head-to-head
+- **Web Interface**: Play against trained AI agents
+- **Easy Setup**: One command with UV
+- **Comprehensive Docs**: Step-by-step guides included
+
+## 📖 Documentation
+
+- **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** - Get started in 2 minutes
+- **[UV_SETUP.md](UV_SETUP.md)** - Complete UV setup guide
+- **[MULTI_AGENT_TRAINING.md](MULTI_AGENT_TRAINING.md)** - Full training documentation
+
+## 🎮 Usage
+
+### Interactive Menu
+```bash
+python run.py
+# Select option 2: Multi-Agent RL Training
+```
+
+### Direct Training
+```bash
+# Train specific agent
+python train_agents.py --agent ppo --episodes 100
+
+# Train all agents + tournament
+python train_agents.py --agent all --episodes 100 --tournament 50
+```
+
+## 📊 Example Output
+
+```
+Training PPO Agent...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━ 45% 45/100 ETA: 02:35
+
+╭─ PPO Agent - Episode 40/100 ─╮
+│ Metric            Value       │
+│ Win Rate          23.5%       │
+│ Avg Reward        12.34       │
+│ Avg Episode Time  2.45s       │
+│ ETA               14:32:15    │
+╰─────────────────────────────╯
+```
+
+## 🏗️ Architecture
+
+```
+train_agents.py              # Beautiful training CLI
+├── BaseRLAgent             # Common interface
+├── RLlibPPOAgent          # Ray RLlib (PPO)
+├── TorchRLSACAgent        # TorchRL (SAC)
+└── LangGraphLLMAgent      # LangGraph (LLM)
+
+Features:
+- 90-feature state encoder
+- 1017-action space with masking
+- Automatic checkpointing
+- Tournament comparison mode
+```
+
+## ⚙️ Requirements
 
 - Python 3.11+
-- PyTorch 2.0+
-- FastAPI (for web interface)
-- NumPy, matplotlib
+- UV (recommended) or pip
+- Optional: OPENAI_API_KEY or ANTHROPIC_API_KEY for LLM agent
 
-## Training Modes
+## 🎯 Training Tips
 
-- **Demo**: 20 episodes (quick test)
-- **Quick**: 100 episodes
-- **Standard**: 1,000 episodes
-- **Full**: 10,000 episodes
-- **Custom**: User-defined parameters
+### Fast Training
+```bash
+python train_agents.py --agent ppo --episodes 50
+```
 
-Agents learn through epsilon-greedy exploration with experience replay and target networks.
+### Best Performance
+```bash
+python train_agents.py --agent sac --episodes 1000
+```
+
+### Strategic Play
+```bash
+export OPENAI_API_KEY="your-key"
+python train_agents.py --agent llm --episodes 100
+```
