@@ -1,31 +1,66 @@
 [project]
 name = "catan-rf"
 version = "0.1.0"
-description = "Engineering-grade Catan RL research project (Python + PyTorch)"
+description = "Multi-Agent RL Training System for Settlers of Catan"
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
   { name = "Your Name" }
 ]
-keywords = ["reinforcement-learning", "catan", "self-play", "pytorch"]
+keywords = ["reinforcement-learning", "catan", "multi-agent", "pytorch", "rllib", "sac", "llm"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
   "Development Status :: 3 - Alpha",
 ]
 dependencies = [
-  "numpy>=1.26",
-  "torch>=2.2",
-  "fastapi>=0.111",
-  "pyyaml>=6.0",
-  "uvicorn>=0.30",
+  # Core dependencies
+  "numpy>=1.26.0",
+  "networkx>=2.6.0",
+  "pandas>=1.3.0",
+  "tqdm>=4.60.0",
+
+  # Deep Learning
+  "torch>=2.2.0",
+
+  # RL Frameworks - Multi-Agent Training
+  "ray[rllib]>=2.9.0",  # Ray RLlib for PPO agent
+  "torchrl>=0.3.0",     # TorchRL for SAC agent
+  "tensordict>=0.3.0",  # Required for TorchRL
+  "gymnasium>=0.29.0",  # Modern gym interface
+  "pettingzoo>=1.24.0", # Multi-agent environments
+
+  # LLM & Agent Frameworks
+  "langchain>=0.1.0",   # LangChain for LLM agents
+  "langgraph>=0.0.40",  # LangGraph for agent workflows
+  "openai>=1.0.0",      # OpenAI API for LLM reasoning
+  "anthropic>=0.8.0",   # Claude API for LLM reasoning
+
+  # Web Interface
+  "fastapi>=0.111.0",
+  "uvicorn>=0.30.0",
+  "pyyaml>=6.0.0",
+
+  # Analysis and Visualization
+  "matplotlib>=3.3.0",
+  "seaborn>=0.11.0",
+  "plotly>=5.0.0",
+  "jupyter>=1.0.0",
+  "rich>=13.0.0",       # Beautiful CLI output
+
+  # Optional: Advanced analysis
+  "scikit-learn>=1.0.0",
+  "dash>=2.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.0",
-  "ruff>=0.4",
+  "pytest>=8.0.0",
+  "ruff>=0.4.0",
+  "black>=21.0.0",
+  "isort>=5.0.0",
+  "mypy>=0.900",
 ]
 
 [tool.ruff]
