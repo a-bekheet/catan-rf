@@ -4,6 +4,14 @@ Train AI agents using cutting-edge RL frameworks to play Settlers of Catan!
 
 ## 🚀 Quick Start (UV - Recommended)
 
+### Automatic Setup (Easiest!)
+```bash
+./setup.sh
+source .venv/bin/activate
+python train_agents.py
+```
+
+### Manual Setup
 ```bash
 # 1. Install UV (blazingly fast package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
