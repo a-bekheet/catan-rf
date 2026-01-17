@@ -63,6 +63,16 @@ dev = [
   "mypy>=0.900",
 ]
 
+[project.scripts]
+catan-rl-train = "scripts.train_dqn_agents:main"
+catan-rl-evaluate = "scripts.evaluate_dqn_agents:main"
+catan-rl-demo = "scripts.demo_integration:main"
+catan-rl-experiment = "examples.run_dqn_experiment:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["catan_rl*", "scripts*", "examples*"]
+
 [tool.ruff]
 line-length = 100
 select = ["E", "F", "I", "B", "UP"]

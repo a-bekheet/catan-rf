@@ -8,18 +8,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from catan.engine.board import standard_board
-from catan.engine.game_state import GameState, initial_game_state
-from catan.engine.types import Action, ActionType
+from catan_rl.core.game.engine.board import standard_board
+from catan_rl.core.game.engine.game_state import GameState, initial_game_state
+from catan_rl.core.game.engine.types import Action, ActionType
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+ROOT_DIR = Path(__file__).resolve().parents[4]
 CARDS_DIR = ROOT_DIR / "cards"
 TILES_DIR = ROOT_DIR / "tiles"
 
 app = FastAPI(title="Catan-RF")
-app.mount("/static/cards", StaticFiles(directory=CARDS_DIR), name="cards")
-app.mount("/static/tiles", StaticFiles(directory=TILES_DIR), name="tiles")
-app.mount("/static", StaticFiles(directory=ROOT_DIR), name="root")
+app.mount("/static/cards", StaticFiles(directory=CARDS_DIR, follow_symlink=True), name="cards")
+app.mount("/static/tiles", StaticFiles(directory=TILES_DIR, follow_symlink=True), name="tiles")
+app.mount("/static", StaticFiles(directory=ROOT_DIR, follow_symlink=True), name="root")
 
 _state_lock = threading.Lock()
 _state: GameState = initial_game_state(standard_board())
@@ -303,6 +303,23 @@ def index() -> str:
       height: 36px;
       object-fit: contain;
     }
+    .resource-icon {
+      width: 100%;
+      height: 36px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    .resource-icon.brick { background: linear-gradient(135deg, #c45c3b 0%, #8b3a2a 100%); }
+    .resource-icon.wood { background: linear-gradient(135deg, #6b8e4e 0%, #3d5c2e 100%); }
+    .resource-icon.ore { background: linear-gradient(135deg, #7a8899 0%, #4a5a6a 100%); }
+    .resource-icon.grain { background: linear-gradient(135deg, #e8c547 0%, #c4a030 100%); }
+    .resource-icon.sheep { background: linear-gradient(135deg, #90c56a 0%, #6a9a4a 100%); }
     .resource-deck-card, .building-deck-card, .dev-deck-card {
       position: relative;
     }
@@ -495,11 +512,11 @@ def index() -> str:
       </div>
       <div class="legend">
         <!-- Row 1: Resources -->
-        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Brick.png" alt="brick"/>Brick<div id="brickCount" class="resource-count">19</div></div>
-        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Wood.png" alt="wood"/>Wood<div id="lumberCount" class="resource-count">19</div></div>
-        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Ore.png" alt="ore"/>Ore<div id="oreCount" class="resource-count">19</div></div>
-        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Grain.png" alt="grain"/>Grain<div id="grainCount" class="resource-count">19</div></div>
-        <div class="legend-card resource-deck-card"><img src="/static/cards/Resource_Sheep.png" alt="sheep"/>Sheep<div id="woolCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><div class="resource-icon brick">B</div>Brick<div id="brickCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><div class="resource-icon wood">W</div>Wood<div id="lumberCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><div class="resource-icon ore">O</div>Ore<div id="oreCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><div class="resource-icon grain">G</div>Grain<div id="grainCount" class="resource-count">19</div></div>
+        <div class="legend-card resource-deck-card"><div class="resource-icon sheep">S</div>Sheep<div id="woolCount" class="resource-count">19</div></div>
 
         <!-- Row 2: Buildings and Dev Cards -->
         <div class="legend-card building-deck-card"><img id="settlementImg" src="/static/cards/Piece-Settlement.png" alt="settlements"/>Settlements<div id="settlementCount" class="building-count">5</div></div>
@@ -589,12 +606,12 @@ def index() -> str:
     let previousRoll = null;
     let previousWinner = null;
 
-    const resourceCards = {
-      brick: '/static/cards/Resource_Brick.png',
-      lumber: '/static/cards/Resource_Wood.png',
-      ore: '/static/cards/Resource_Ore.png',
-      grain: '/static/cards/Resource_Grain.png',
-      wool: '/static/cards/Resource_Sheep.png'
+    const resourceIcons = {
+      brick: { cssClass: 'brick', letter: 'B' },
+      lumber: { cssClass: 'wood', letter: 'W' },
+      ore: { cssClass: 'ore', letter: 'O' },
+      grain: { cssClass: 'grain', letter: 'G' },
+      wool: { cssClass: 'sheep', letter: 'S' }
     };
 
     const devCards = {
@@ -821,7 +838,8 @@ def index() -> str:
         ['brick', 'lumber', 'ore', 'grain', 'wool'].forEach(res => {
           const cell = document.createElement('div');
           cell.className = 'resource';
-          cell.innerHTML = `<img src="${resourceCards[res]}" alt="${res}"/><div>${player.resources[res]}</div>`;
+          const icon = resourceIcons[res];
+          cell.innerHTML = `<div class="resource-icon ${icon.cssClass}" style="width:28px;height:28px;font-size:14px;">${icon.letter}</div><div>${player.resources[res]}</div>`;
           resourcesRow.appendChild(cell);
         });
 

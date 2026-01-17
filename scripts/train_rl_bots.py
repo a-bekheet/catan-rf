@@ -10,14 +10,14 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
-# Add src to path so we can import catan modules
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add project root to path for local development
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from catan.agents.random_agent import RandomAgent
-from catan.agents.rl_agent import RLAgent
-from catan.engine.board import standard_board
-from catan.engine.game_state import GameState, initial_game_state, TurnPhase
-from catan.engine.types import Action
+from catan_rl.core.game.agents.random_agent import RandomAgent
+from catan_rl.core.game.agents.rl_agent import RLAgent
+from catan_rl.core.game.engine.board import standard_board
+from catan_rl.core.game.engine.game_state import GameState, initial_game_state, TurnPhase
+from catan_rl.core.game.engine.types import Action
 
 
 class MultiAgentTrainer:

@@ -175,9 +175,9 @@ class DQNTrainer:
 
     def _run_training_loop(self, agents: List[DQNAgentAdapter]) -> Dict[str, Any]:
         """Run the main training loop."""
-        from catan.engine.board import standard_board
-        from catan.engine.game_state import initial_game_state
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.board import standard_board
+        from catan_rl.core.game.engine.game_state import initial_game_state
+        from catan_rl.core.game.engine.rules import apply_action
 
         num_episodes = self.config['num_episodes']
         save_frequency = self.config.get('save_frequency', 100)
@@ -233,10 +233,10 @@ class DQNTrainer:
 
     def _run_episode(self, game_state, agents) -> Dict[str, Any]:
         """Run a single episode and return results."""
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.rules import apply_action
 
         episode_length = 0
-        max_turns = 1000
+        max_turns = 1000  # Reduced from 1000 to encourage faster games
         episode_rewards = {agent.player_id: 0.0 for agent in agents if isinstance(agent, DQNAgentAdapter)}
 
         while game_state.winner is None and episode_length < max_turns:
@@ -255,9 +255,12 @@ class DQNTrainer:
             prev_state = game_state
             game_state = apply_action(game_state, action)
 
+            # Check if truncated (hit max_turns without winner)
+            truncated = (episode_length >= max_turns - 1 and game_state.winner is None)
+
             # Update DQN agents
             if isinstance(current_agent, DQNAgentAdapter):
-                reward = current_agent.compute_reward(prev_state, game_state)
+                reward = current_agent.compute_reward(prev_state, game_state, truncated=truncated)
                 current_agent.update(prev_state, action, reward, game_state)
                 episode_rewards[current_player_id] += reward
 
@@ -348,11 +351,13 @@ class DQNTrainer:
 
         # Run evaluation games
         for game in range(eval_games):
-            from catan.engine.board import standard_board
-            from catan.engine.game_state import initial_game_state
+            from catan_rl.core.game.engine.board import standard_board
+            from catan_rl.core.game.engine.game_state import initial_game_state
 
             # Use different seed for evaluation
-            board = standard_board(seed=10000 + episode * 1000 + game)
+            # Handle string episode names (e.g., 'final') by using hash
+            episode_num = episode if isinstance(episode, int) else hash(str(episode)) % 10000
+            board = standard_board(seed=10000 + episode_num * 1000 + game)
             game_state = initial_game_state(board, num_players=len(agents))
 
             # Reset agents

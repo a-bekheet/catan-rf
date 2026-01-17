@@ -31,8 +31,11 @@ class RandomAgent:
 
     def _generate_discard_action(self, state: GameState, template_action: Action) -> Action:
         """Generate a valid discard action with proper resource allocation."""
-        player = state.players[self.player_id]
-        required = state.pending_discards.get(self.player_id, 0)
+        # Use state.current_player instead of self.player_id since agents
+        # may be placed at different positions in different games
+        current_player_id = state.current_player
+        player = state.players[current_player_id]
+        required = state.pending_discards.get(current_player_id, 0)
 
         if required <= 0:
             return template_action
@@ -60,7 +63,7 @@ class RandomAgent:
         return Action(
             action_type=ActionType.DISCARD,
             payload={
-                "player_id": self.player_id,
+                "player_id": current_player_id,
                 "resources": discard_counts
             }
         )

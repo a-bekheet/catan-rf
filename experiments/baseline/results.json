@@ -1,0 +1,154 @@
+{
+  "config": {
+    "name": "baseline_training",
+    "agents": [
+      {
+        "type": "baseline",
+        "player_id": 0
+      },
+      {
+        "type": "random",
+        "player_id": 1
+      },
+      {
+        "type": "random",
+        "player_id": 2
+      },
+      {
+        "type": "random",
+        "player_id": 3
+      }
+    ],
+    "num_episodes": 5,
+    "save_frequency": 100,
+    "log_frequency": 50,
+    "evaluation_frequency": 200,
+    "evaluation_games": 50,
+    "output_dir": "experiments/baseline"
+  },
+  "training_time": 3.381488800048828,
+  "training_results": {
+    "episodes": [
+      {
+        "winner": null,
+        "episode_length": 300,
+        "episode_rewards": {
+          "0": 46.0
+        },
+        "final_scores": {
+          "0": 2
+        }
+      },
+      {
+        "winner": null,
+        "episode_length": 300,
+        "episode_rewards": {
+          "0": 73.0
+        },
+        "final_scores": {
+          "0": 3
+        }
+      },
+      {
+        "winner": null,
+        "episode_length": 300,
+        "episode_rewards": {
+          "0": 154.0
+        },
+        "final_scores": {
+          "0": 5
+        }
+      },
+      {
+        "winner": null,
+        "episode_length": 300,
+        "episode_rewards": {
+          "0": 42.0
+        },
+        "final_scores": {
+          "0": 2
+        }
+      },
+      {
+        "winner": null,
+        "episode_length": 300,
+        "episode_rewards": {
+          "0": 88.0
+        },
+        "final_scores": {
+          "0": 4
+        }
+      }
+    ],
+    "wins_per_agent": {
+      "0": 0
+    },
+    "final_win_rates": {
+      "0": 0.0
+    }
+  },
+  "evaluation_results": {
+    "episode": "final",
+    "eval_games": 50,
+    "eval_wins": {
+      "0": 0
+    },
+    "eval_win_rates": {
+      "0": 0.0
+    }
+  },
+  "training_curves": {
+    "episodes": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "win_rates": {
+      "0": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "avg_rewards": {
+      "0": [
+        46.0,
+        73.0,
+        154.0,
+        42.0,
+        88.0
+      ]
+    },
+    "q_values": {
+      "0": [
+        0.0,
+        -0.12080482044752608,
+        -0.10935184303671122,
+        -0.030061548110097647,
+        0.01522428672760725
+      ]
+    },
+    "losses": {
+      "0": [
+        0.0,
+        5.271143757282419,
+        6.358366241306067,
+        3.1574251096695662,
+        3.0757621224224567
+      ]
+    },
+    "epsilon_values": {
+      "0": [
+        1.0,
+        0.36972963764972655,
+        0.05,
+        0.05,
+        0.05
+      ]
+    }
+  }
+}

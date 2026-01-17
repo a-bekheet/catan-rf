@@ -1,0 +1,13 @@
+DQN AGENT EVALUATION REPORT
+Report Type: COMPARISON
+==================================================
+
+AGENT COMPARISON RESULTS
+-------------------------
+
+Overall Performance:
+  baseline: 0/2 wins (0.000 win rate)
+  spatial: 0/2 wins (0.000 win rate)
+
+Statistical Significance:
+  spatial_vs_baseline: not significant (p=nan)

@@ -184,37 +184,71 @@ class RLAgent:
         target = reward + self.discount * max_next_q
         self.q_table[state_key][action_key] += self.learning_rate * (target - current_q)
 
-    def compute_reward(self, state: GameState, next_state: GameState) -> float:
-        """Compute comprehensive reward for strategic Catan play."""
+    def compute_reward(self, state: GameState, next_state: GameState, truncated: bool = False) -> float:
+        """
+        Compute reward for RL training - simplified and focused on key signals.
+
+        Key principles:
+        1. Strong win/loss signal (sparse but clear)
+        2. VP progress (dense, interpretable)
+        3. Building progress (shaped reward for structure)
+        4. Endgame acceleration (bonus when close to winning)
+        5. Truncation penalty (discourage timeout)
+        """
         reward = 0.0
-
-        # === FINAL OUTCOME REWARDS ===
-        if next_state.winner == self.player_id:
-            reward += 100.0  # Win the game
-        elif next_state.winner is not None:
-            reward -= 50.0   # Someone else won
-
-        # === VICTORY POINT PROGRESS ===
         player = next_state.players[self.player_id]
         prev_player = state.players[self.player_id]
 
+        # === TERMINAL REWARDS (Most Important) ===
+        if next_state.winner == self.player_id:
+            reward += 100.0  # WIN!
+        elif next_state.winner is not None:
+            reward -= 50.0   # LOSS
+        elif truncated:
+            # Truncation penalty - encourages faster play
+            # Scale by how close we were to winning
+            my_vp = player.victory_points
+            opponent_vps = [
+                p.victory_points for pid, p in next_state.players.items()
+                if pid != self.player_id
+            ]
+            max_opponent_vp = max(opponent_vps) if opponent_vps else 0
+            # If we're ahead, smaller penalty. If behind, larger penalty.
+            if my_vp >= max_opponent_vp:
+                reward -= 10.0  # We were winning but timed out
+            else:
+                reward -= 25.0  # We were losing and timed out
+
+        # === VICTORY POINT PROGRESS (Key Dense Reward) ===
         vp_gain = player.victory_points - prev_player.victory_points
-        reward += vp_gain * 15.0  # Increased VP reward
+        reward += vp_gain * 20.0  # Strong VP incentive
 
-        # === BUILDING REWARDS WITH STRATEGIC POSITIONING ===
-        reward += self._building_rewards(state, next_state)
+        # === ENDGAME ACCELERATION ===
+        # Bonus for getting close to winning - encourages finishing games
+        if player.victory_points >= 8 and prev_player.victory_points < 8:
+            reward += 15.0  # First time reaching 8+ VP
+        elif player.victory_points >= 9 and prev_player.victory_points < 9:
+            reward += 20.0  # First time reaching 9+ VP
 
-        # === RESOURCE MANAGEMENT REWARDS ===
-        reward += self._resource_rewards(state, next_state)
+        # === BUILDING PROGRESS (Shaped Reward) ===
+        new_settlements = len(player.settlements) - len(prev_player.settlements)
+        new_cities = len(player.cities) - len(prev_player.cities)
+        new_roads = len(player.roads) - len(prev_player.roads)
 
-        # === DEVELOPMENT STRATEGY REWARDS ===
-        reward += self._development_rewards(state, next_state)
+        reward += new_settlements * 5.0  # Settlements = VP + production
+        reward += new_cities * 8.0       # Cities = VP + 2x production
+        reward += new_roads * 1.0        # Roads enable expansion
 
-        # === STRATEGIC INTERACTION REWARDS ===
-        reward += self._strategic_interaction_rewards(state, next_state)
+        # Bonus for road expansion that opens settlement spots
+        if new_roads > 0:
+            prev_spots = self._count_valid_settlement_spots(state, prev_player)
+            curr_spots = self._count_valid_settlement_spots(next_state, player)
+            if curr_spots > prev_spots:
+                reward += (curr_spots - prev_spots) * 3.0
 
-        # === POSITION AND CONTROL REWARDS ===
-        reward += self._position_control_rewards(state, next_state)
+        # === DEVELOPMENT CARD PROGRESS ===
+        new_knights = player.knights_played - prev_player.knights_played
+        reward += new_knights * 2.0  # Knights help with robber + largest army
 
         return reward
 
@@ -533,8 +567,11 @@ class RLAgent:
 
     def _generate_discard_action(self, state: GameState, template_action: Action) -> Action:
         """Generate a valid discard action with proper resource allocation."""
-        player = state.players[self.player_id]
-        required = state.pending_discards.get(self.player_id, 0)
+        # Use state.current_player instead of self.player_id since agents
+        # may be placed at different positions in different games
+        current_player_id = state.current_player
+        player = state.players[current_player_id]
+        required = state.pending_discards.get(current_player_id, 0)
 
         if required <= 0:
             return template_action
@@ -562,7 +599,7 @@ class RLAgent:
         return Action(
             action_type=ActionType.DISCARD,
             payload={
-                "player_id": self.player_id,
+                "player_id": current_player_id,
                 "resources": discard_counts
             }
         )

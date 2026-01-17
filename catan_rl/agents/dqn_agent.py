@@ -392,7 +392,7 @@ class DQNAgentFactory:
 
     @staticmethod
     def create_baseline_agent(agent_id: int) -> DQNAgent:
-        """Create baseline DQN agent with simple configuration."""
+        """Create baseline DQN agent with optimized configuration for faster learning."""
         config = {
             'state_encoder': {
                 'type': 'feature',
@@ -401,18 +401,19 @@ class DQNAgentFactory:
             'network': {
                 'type': 'mlp',
                 'params': {
-                    'hidden_dims': [512, 256, 128],
-                    'dropout': 0.3,
-                    'batch_norm': False
+                    # Smaller network = faster training, less overfitting
+                    'hidden_dims': [256, 128],
+                    'dropout': 0.1,  # Reduced dropout for faster convergence
+                    'batch_norm': True  # Helps stabilize training
                 }
             },
             'algorithm': {
-                'type': 'vanilla',
+                'type': 'double',  # Double DQN is better than vanilla
                 'params': {
-                    'learning_rate': 1e-4,
+                    'learning_rate': 3e-4,  # Higher LR for faster learning
                     'gamma': 0.99,
-                    'target_update_frequency': 1000,
-                    'batch_size': 32
+                    'target_update_frequency': 500,  # More frequent updates
+                    'batch_size': 64  # Larger batches for stability
                 }
             },
             'replay_buffer': {
@@ -421,10 +422,10 @@ class DQNAgentFactory:
                 'params': {}
             },
             'epsilon_start': 1.0,
-            'epsilon_min': 0.1,
-            'epsilon_decay': 0.995,
-            'update_frequency': 4,
-            'warmup_steps': 1000
+            'epsilon_min': 0.05,  # Lower minimum for more exploitation
+            'epsilon_decay': 0.99,  # Faster decay (0.995 -> 0.99)
+            'update_frequency': 2,  # More frequent updates
+            'warmup_steps': 500  # Reduced warmup (1000 -> 500)
         }
         return DQNAgent(agent_id, config)
 
@@ -441,18 +442,18 @@ class DQNAgentFactory:
             'network': {
                 'type': 'conv',
                 'params': {
-                    'conv_channels': [32, 64, 128],
-                    'hidden_dim': 512,
-                    'dropout': 0.3
+                    'conv_channels': [32, 64],  # Reduced for faster training
+                    'hidden_dim': 256,
+                    'dropout': 0.1
                 }
             },
             'algorithm': {
                 'type': 'double',
                 'params': {
-                    'learning_rate': 1e-4,
+                    'learning_rate': 3e-4,
                     'gamma': 0.99,
-                    'target_update_frequency': 1000,
-                    'batch_size': 32
+                    'target_update_frequency': 500,
+                    'batch_size': 64
                 }
             },
             'replay_buffer': {
@@ -464,10 +465,10 @@ class DQNAgentFactory:
                 }
             },
             'epsilon_start': 1.0,
-            'epsilon_min': 0.1,
-            'epsilon_decay': 0.995,
-            'update_frequency': 4,
-            'warmup_steps': 1000
+            'epsilon_min': 0.05,
+            'epsilon_decay': 0.99,
+            'update_frequency': 2,
+            'warmup_steps': 500
         }
         return DQNAgent(agent_id, config)
 
@@ -482,19 +483,19 @@ class DQNAgentFactory:
             'network': {
                 'type': 'dueling_mlp',
                 'params': {
-                    'hidden_dims': [512, 256],
-                    'value_dim': 128,
-                    'advantage_dim': 256,
-                    'dropout': 0.3
+                    'hidden_dims': [256, 128],  # Smaller network
+                    'value_dim': 64,
+                    'advantage_dim': 128,
+                    'dropout': 0.1
                 }
             },
             'algorithm': {
                 'type': 'rainbow',
                 'params': {
-                    'learning_rate': 1e-4,
+                    'learning_rate': 3e-4,
                     'gamma': 0.99,
-                    'target_update_frequency': 1000,
-                    'batch_size': 32,
+                    'target_update_frequency': 500,
+                    'batch_size': 64,
                     'n_step_returns': 3,
                     'use_prioritized_replay': True
                 }
@@ -508,9 +509,9 @@ class DQNAgentFactory:
                 }
             },
             'epsilon_start': 1.0,
-            'epsilon_min': 0.1,
-            'epsilon_decay': 0.995,
-            'update_frequency': 4,
-            'warmup_steps': 1000
+            'epsilon_min': 0.05,
+            'epsilon_decay': 0.99,
+            'update_frequency': 2,
+            'warmup_steps': 500
         }
         return DQNAgent(agent_id, config)

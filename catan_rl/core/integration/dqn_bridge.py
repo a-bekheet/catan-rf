@@ -4,8 +4,8 @@ from typing import List, Dict, Any, Tuple
 import torch
 from pathlib import Path
 
-from catan_rl.core.game.engine.game_state import GameState
-from catan_rl.core.game.engine.types import Action
+from catan_rl.core.game.engine.game_state import GameState, TurnPhase
+from catan_rl.core.game.engine.types import Action, ActionType
 from ..game.agents.rl_agent import RLAgent
 from ...agents.dqn_agent import DQNAgent, DQNAgentFactory
 
@@ -161,16 +161,22 @@ class DQNAgentAdapter(RLAgent):
 
     def select_action(self, state: GameState, legal_actions: List[Action]) -> Action:
         """Select action using DQN agent via bridge."""
-        return self.bridge.select_action(state, legal_actions)
+        action = self.bridge.select_action(state, legal_actions)
+
+        # Handle discard actions by generating valid resource combinations
+        if action.action_type == ActionType.DISCARD and state.phase == TurnPhase.DISCARD:
+            action = self._generate_discard_action(state, action)
+
+        return action
 
     def update(self, state: GameState, action: Action, reward: float, next_state: GameState):
         """Update DQN agent via bridge."""
         self.bridge.update(state, action, reward, next_state)
 
-    def compute_reward(self, state: GameState, next_state: GameState) -> float:
+    def compute_reward(self, state: GameState, next_state: GameState, truncated: bool = False) -> float:
         """Use original reward computation for consistency."""
         # We can use the original RLAgent reward computation
-        return super().compute_reward(state, next_state)
+        return super().compute_reward(state, next_state, truncated=truncated)
 
     def reset(self):
         """Reset DQN agent via bridge."""
@@ -188,6 +194,9 @@ class DQNAgentAdapter(RLAgent):
 
     def load_model(self):
         """Load DQN model."""
+        # Check if bridge has been initialized (called during super().__init__)
+        if not hasattr(self, 'bridge') or self.bridge is None:
+            return
         checkpoint_path = self.model_path.replace('.json', '_dqn')
         if Path(checkpoint_path + '.agent.json').exists():
             self.bridge.load_checkpoint(checkpoint_path)
@@ -240,9 +249,9 @@ class ExperimentRunner:
         Returns:
             Comprehensive results dictionary
         """
-        from catan.engine.board import standard_board
-        from catan.engine.game_state import initial_game_state
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.board import standard_board
+        from catan_rl.core.game.engine.game_state import initial_game_state
+        from catan_rl.core.game.engine.rules import apply_action
 
         print(f"Starting experiment with {len(agents)} agents for {num_episodes} episodes")
 
@@ -259,7 +268,7 @@ class ExperimentRunner:
                 agent.reset()
 
             episode_length = 0
-            max_turns = 1000  # Prevent infinite games
+            max_turns = 1000  # Allow full game length now that player trades are disabled
 
             # Run episode
             while game_state.winner is None and episode_length < max_turns:

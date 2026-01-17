@@ -299,7 +299,16 @@ def _update_largest_army(state: GameState) -> None:
             state.players[new_holder].victory_points += 2
 
 
-def legal_actions(state: GameState) -> List[Action]:
+def legal_actions(state: GameState, include_player_trades: bool = False) -> List[Action]:
+    """
+    Get all legal actions for the current player.
+
+    Args:
+        state: Current game state
+        include_player_trades: If False (default), excludes TRADE_PLAYER actions.
+            Player trades add many actions to the space but often don't help training
+            since they just shuffle resources without strategic purpose.
+    """
     if state.winner is not None:
         return []
 
@@ -443,37 +452,40 @@ def legal_actions(state: GameState) -> List[Action]:
                         },
                     )
                 )
-        for other_pid, other_player in state.players.items():
-            if other_pid == state.current_player:
-                continue
-            for give in [
-                ResourceType.BRICK,
-                ResourceType.LUMBER,
-                ResourceType.ORE,
-                ResourceType.GRAIN,
-                ResourceType.WOOL,
-            ]:
-                if player.resources[give] <= 0:
+        # Player trades - only include if explicitly enabled
+        # These add many actions but often just shuffle resources without strategic benefit
+        if include_player_trades:
+            for other_pid, other_player in state.players.items():
+                if other_pid == state.current_player:
                     continue
-                for receive in [
+                for give in [
                     ResourceType.BRICK,
                     ResourceType.LUMBER,
                     ResourceType.ORE,
                     ResourceType.GRAIN,
                     ResourceType.WOOL,
                 ]:
-                    if other_player.resources[receive] <= 0:
+                    if player.resources[give] <= 0:
                         continue
-                    actions.append(
-                        Action(
-                            action_type=ActionType.TRADE_PLAYER,
-                            payload={
-                                "to_player": other_pid,
-                                "give": {give.value: 1},
-                                "receive": {receive.value: 1},
-                            },
+                    for receive in [
+                        ResourceType.BRICK,
+                        ResourceType.LUMBER,
+                        ResourceType.ORE,
+                        ResourceType.GRAIN,
+                        ResourceType.WOOL,
+                    ]:
+                        if other_player.resources[receive] <= 0:
+                            continue
+                        actions.append(
+                            Action(
+                                action_type=ActionType.TRADE_PLAYER,
+                                payload={
+                                    "to_player": other_pid,
+                                    "give": {give.value: 1},
+                                    "receive": {receive.value: 1},
+                                },
+                            )
                         )
-                    )
         return actions
 
     return actions
@@ -654,11 +666,12 @@ def validate_action(state: GameState, action: Action) -> List[RuleViolation]:
                 violations.append(RuleViolation(reason="cannot_play_victory_point"))
                 return violations
 
-            # Cards bought this turn can't be played (except victory points which are automatic)
-            player_new_cards = state.new_dev_cards.get(state.current_player, [])
-            if dev_card in player_new_cards:
-                violations.append(RuleViolation(reason="cannot_play_card_bought_this_turn"))
-                return violations
+            # NOTE: Cards bought this turn can't be played, but this is already enforced
+            # by the game design: non-VP cards bought this turn are stored in new_dev_cards,
+            # not in dev_cards. They only move to dev_cards at end of turn (_advance_turn).
+            # Since legal_actions only offers cards from dev_cards, and we already checked
+            # above that the card is in dev_cards, we're guaranteed it's from a previous turn.
+            # No additional check needed here.
 
             if dev_card == DevCardType.KNIGHT:
                 tile_id = int(action.payload.get("tile_id", -1))

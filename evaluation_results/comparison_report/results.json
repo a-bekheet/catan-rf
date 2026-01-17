@@ -1,0 +1,93 @@
+{
+  "agent_types": [
+    "baseline",
+    "spatial"
+  ],
+  "head_to_head": {
+    "baseline_vs_spatial": {
+      "num_games": 2,
+      "wins": {
+        "0": 0,
+        "1": 0,
+        "other": 2
+      },
+      "win_rates": {
+        "0": 0.0,
+        "1": 0.0,
+        "other": 1.0
+      },
+      "avg_game_length": 1000.0
+    }
+  },
+  "round_robin": {
+    "total_wins": {
+      "baseline": 0,
+      "spatial": 0
+    },
+    "match_results": [
+      {
+        "game": 0,
+        "agents": [
+          "spatial",
+          "baseline",
+          "spatial",
+          "baseline"
+        ],
+        "winner": null,
+        "winner_type": null,
+        "game_data": {
+          "episode_length": 1000,
+          "final_scores": {
+            "0": 4,
+            "1": 4,
+            "2": 2,
+            "3": 2
+          }
+        }
+      },
+      {
+        "game": 1,
+        "agents": [
+          "baseline",
+          "spatial",
+          "baseline",
+          "spatial"
+        ],
+        "winner": null,
+        "winner_type": null,
+        "game_data": {
+          "episode_length": 1000,
+          "final_scores": {
+            "0": 2,
+            "1": 2,
+            "2": 2,
+            "3": 4
+          }
+        }
+      }
+    ],
+    "win_matrix": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ]
+  },
+  "statistical_analysis": {
+    "win_data": {
+      "spatial": 0.0,
+      "baseline": 0.0
+    },
+    "pairwise_tests": {
+      "spatial_vs_baseline": {
+        "t_statistic": NaN,
+        "p_value": NaN,
+        "significant": false
+      }
+    }
+  }
+}

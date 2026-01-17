@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, asdict
 import numpy as np
 
-from catan_rl.experiments.agent import BaseAgent, AgentMetrics
+from catan_rl.experiments.agent import BaseAgent, AgentMetrics, GameMetrics
 from catan_rl.core.game.engine.game_state import initial_game_state
 from catan_rl.core.game.engine.board import standard_board
 from catan_rl.core.game.engine.types import Action

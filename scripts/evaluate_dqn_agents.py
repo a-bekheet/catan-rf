@@ -179,9 +179,9 @@ class DQNEvaluator:
         num_games: int
     ) -> Dict[str, Any]:
         """Run evaluation games against specific opponent type."""
-        from catan.engine.board import standard_board
-        from catan.engine.game_state import initial_game_state
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.board import standard_board
+        from catan_rl.core.game.engine.game_state import initial_game_state
+        from catan_rl.core.game.engine.rules import apply_action
 
         # Set agent to evaluation mode
         agent.set_evaluation_mode(True)
@@ -245,7 +245,7 @@ class DQNEvaluator:
                 game_state = apply_action(game_state, action)
 
                 # Update DQN agents
-                if hasattr(current_agent, 'update'):
+                if hasattr(current_agent, 'update') and hasattr(current_agent, 'compute_reward'):
                     reward = current_agent.compute_reward(prev_state, game_state)
                     current_agent.update(prev_state, action, reward, game_state)
 
@@ -290,9 +290,9 @@ class DQNEvaluator:
 
     def _run_agent_matchup(self, agent1, agent2, num_games) -> Dict[str, Any]:
         """Run games between two specific agents."""
-        from catan.engine.board import standard_board
-        from catan.engine.game_state import initial_game_state
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.board import standard_board
+        from catan_rl.core.game.engine.game_state import initial_game_state
+        from catan_rl.core.game.engine.rules import apply_action
         from catan_rl.core.game.agents.random_agent import RandomAgent
 
         agent1.set_evaluation_mode(True)
@@ -336,7 +336,7 @@ class DQNEvaluator:
                 prev_state = game_state
                 game_state = apply_action(game_state, action)
 
-                if hasattr(current_agent, 'update'):
+                if hasattr(current_agent, 'update') and hasattr(current_agent, 'compute_reward'):
                     reward = current_agent.compute_reward(prev_state, game_state)
                     current_agent.update(prev_state, action, reward, game_state)
 
@@ -401,9 +401,9 @@ class DQNEvaluator:
 
     def _run_single_tournament_game(self, agents, game_seed) -> Tuple[int, Dict[str, Any]]:
         """Run a single tournament game."""
-        from catan.engine.board import standard_board
-        from catan.engine.game_state import initial_game_state
-        from catan.engine.rules import apply_action
+        from catan_rl.core.game.engine.board import standard_board
+        from catan_rl.core.game.engine.game_state import initial_game_state
+        from catan_rl.core.game.engine.rules import apply_action
 
         board = standard_board(seed=game_seed)
         game_state = initial_game_state(board, num_players=len(agents))
@@ -556,6 +556,8 @@ class DQNEvaluator:
             return obj.tolist()
         elif isinstance(obj, (np.integer, np.floating)):
             return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
         elif isinstance(obj, torch.Tensor):
             return obj.tolist()
         else:

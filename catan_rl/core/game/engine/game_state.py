@@ -56,10 +56,16 @@ class GameState:
     new_dev_cards: Dict[int, List[DevCardType]] = field(default_factory=dict)
     last_bought_dev_card: DevCardType | None = None
 
-    def legal_actions(self) -> List[Action]:
+    def legal_actions(self, include_player_trades: bool = False) -> List[Action]:
+        """Get all legal actions for the current player.
+
+        Args:
+            include_player_trades: If False (default), excludes TRADE_PLAYER actions
+                which can dominate the action space without strategic benefit.
+        """
         from .rules import legal_actions
 
-        return legal_actions(self)
+        return legal_actions(self, include_player_trades=include_player_trades)
 
     def apply(self, action: Action) -> "GameState":
         from .rules import apply_action

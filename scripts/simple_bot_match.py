@@ -7,13 +7,14 @@ import sys
 import time
 from pathlib import Path
 
-# Add src to path so we can import catan modules
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add project root to path for local development
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-from catan.agents.random_agent import RandomAgent
-from catan.agents.rl_agent import RLAgent
-from catan.engine.board import standard_board
-from catan.engine.game_state import initial_game_state
+from catan_rl.core.game.agents.random_agent import RandomAgent
+from catan_rl.core.game.agents.rl_agent import RLAgent
+from catan_rl.core.game.engine.board import standard_board
+from catan_rl.core.game.engine.game_state import initial_game_state
 
 
 def run_bot_match():

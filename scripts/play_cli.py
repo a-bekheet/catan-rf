@@ -3,9 +3,9 @@ from __future__ import annotations
 import sys
 from typing import Dict, List
 
-from catan.engine.board import standard_board
-from catan.engine.game_state import GameState, initial_game_state
-from catan.engine.types import Action, ActionType, ResourceType
+from catan_rl.core.game.engine.board import standard_board
+from catan_rl.core.game.engine.game_state import GameState, initial_game_state
+from catan_rl.core.game.engine.types import Action, ActionType, ResourceType
 
 HELP_TEXT = """
 Commands:

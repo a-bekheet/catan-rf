@@ -150,14 +150,47 @@ class FeatureStateEncoder(BaseStateEncoder):
         return probabilities.get(number, 0.0)
 
     def _get_adjacent_tiles(self, state: GameState, vertex_id: int) -> List[int]:
-        """Get tiles adjacent to a vertex."""
-        # Simplified implementation
-        return []
+        """Get tiles adjacent to a vertex using hex_to_vertices mapping."""
+        tiles = []
+        for tile_id, vertices in state.board.graph.hex_to_vertices.items():
+            if vertex_id in vertices:
+                tiles.append(tile_id)
+        return tiles
 
     def _calculate_port_access(self, state: GameState, player_id: int) -> int:
-        """Calculate number of accessible ports."""
-        # Would need proper port detection
-        return 0
+        """Calculate number of accessible ports based on settlements/cities."""
+        player = state.players[player_id]
+        port_count = 0
+
+        # Check if player has buildings at port vertices
+        # Ports are typically at specific vertices - check for port markers in board
+        if hasattr(state.board, 'ports'):
+            for port in state.board.ports:
+                if hasattr(port, 'vertices'):
+                    for vertex_id in port.vertices:
+                        if vertex_id in player.settlements or vertex_id in player.cities:
+                            port_count += 1
+                            break  # Count each port only once
+
+        # Fallback: estimate based on coastal positions
+        # Coastal vertices tend to be at the edge of the hex grid
+        if port_count == 0:
+            coastal_vertices = self._get_coastal_vertices(state)
+            for vertex_id in player.settlements | player.cities:
+                if vertex_id in coastal_vertices:
+                    port_count += 1
+
+        return min(port_count, 5)  # Cap at 5 ports
+
+    def _get_coastal_vertices(self, state: GameState) -> set:
+        """Get vertices at the edge of the board (potential port locations)."""
+        # Vertices that are adjacent to fewer than 3 tiles are coastal
+        coastal = set()
+        for vertex_id in state.board.graph.vertices:
+            adjacent_tiles = self._get_adjacent_tiles(state, vertex_id)
+            if len(adjacent_tiles) < 3:  # Edge vertices touch fewer tiles
+                coastal.add(vertex_id)
+        return coastal
 
     def _calculate_robber_vulnerability(self, state: GameState, player_id: int) -> float:
         """Calculate vulnerability to robber."""
